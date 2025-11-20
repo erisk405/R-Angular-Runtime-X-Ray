@@ -16,20 +16,20 @@ export class DecorationManager {
     this.outputChannel = outputChannel;
     this.outputChannel.appendLine("[DecorationManager] Initialized");
 
-    // Red background for slow methods (>50ms)
+    // Red background for slow methods (>50ms) - ALERT!
     this.slowMethodDecorationType =
       vscode.window.createTextEditorDecorationType({
-        backgroundColor: "rgba(255, 0, 0, 0.3)", // Increased opacity
+        backgroundColor: "rgba(255, 0, 0, 0.3)", // Red background for alert
         isWholeLine: false,
         rangeBehavior: vscode.DecorationRangeBehavior.ClosedClosed,
         after: {
           margin: "0 0 0 1em",
-          color: new vscode.ThemeColor("errorForeground"), // Use theme colors
+          color: new vscode.ThemeColor("errorForeground"),
           fontWeight: "bold",
         },
       });
 
-    // Gutter icon for fast methods (≤50ms)
+    // Normal performance display for fast methods (≤50ms) - No background
     this.fastMethodDecorationType =
       vscode.window.createTextEditorDecorationType({
         rangeBehavior: vscode.DecorationRangeBehavior.ClosedClosed,
@@ -148,7 +148,7 @@ export class DecorationManager {
 
       // Apply method performance decoration
       if (data.averageDuration > 50) {
-        // Slow method - red background
+        // Slow method - ALERT with red background
         slowDecorations.push({
           range,
           hoverMessage: this.createHoverMessage(data),
@@ -159,7 +159,7 @@ export class DecorationManager {
           },
         });
       } else {
-        // Fast method - green indicator
+        // Fast method - normal display without alert
         fastDecorations.push({
           range,
           hoverMessage: this.createHoverMessage(data),
