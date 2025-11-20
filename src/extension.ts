@@ -109,7 +109,20 @@ export function activate(context: vscode.ExtensionContext) {
         }
 
         try {
-          const result = nativeModule.locateFile(message.class, workspacePath);
+          // Try original class name first
+          let result = nativeModule.locateFile(message.class, workspacePath);
+
+          // If not found and class name starts with underscore, try without it
+          if (!result.found && message.class.startsWith("_")) {
+            const classNameWithoutUnderscore = message.class.substring(1);
+            outputChannel.appendLine(
+              `Retrying without underscore: ${classNameWithoutUnderscore}`,
+            );
+            result = nativeModule.locateFile(
+              classNameWithoutUnderscore,
+              workspacePath,
+            );
+          }
 
           if (result.found) {
             filePath = result.filePath;
@@ -135,7 +148,21 @@ export function activate(context: vscode.ExtensionContext) {
           return;
         }
         const fileContent = fs.readFileSync(filePath, "utf-8");
-        const result = nativeModule.parseMethod(fileContent, message.method);
+
+        // Try original method name first
+        let result = nativeModule.parseMethod(fileContent, message.method);
+
+        // If not found and method name starts with underscore, try without it
+        if (!result.found && message.method.startsWith("_")) {
+          const methodNameWithoutUnderscore = message.method.substring(1);
+          outputChannel.appendLine(
+            `Retrying method without underscore: ${methodNameWithoutUnderscore}`,
+          );
+          result = nativeModule.parseMethod(
+            fileContent,
+            methodNameWithoutUnderscore,
+          );
+        }
 
         if (result.found) {
           methodLine = result.line;

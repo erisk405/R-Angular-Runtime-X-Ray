@@ -189,12 +189,28 @@ export class DecorationManager {
       `[DecorationManager] Applied: ${slowDecorations.length} slow, ${fastDecorations.length} fast, ${changeDetectionDecorations.length} CD`,
     );
 
+    // Debug: Log all decoration details
+    slowDecorations.forEach((dec, idx) => {
+      this.outputChannel.appendLine(
+        `  [Slow #${idx + 1}] Line ${dec.range.start.line + 1}: ${dec.renderOptions?.after?.contentText}`,
+      );
+    });
+    fastDecorations.forEach((dec, idx) => {
+      this.outputChannel.appendLine(
+        `  [Fast #${idx + 1}] Line ${dec.range.start.line + 1}: ${dec.renderOptions?.after?.contentText}`,
+      );
+    });
+
     // Clear existing decorations and apply new ones
     editor.setDecorations(this.slowMethodDecorationType, slowDecorations);
     editor.setDecorations(this.fastMethodDecorationType, fastDecorations);
     editor.setDecorations(
       this.changeDetectionDecorationType,
       changeDetectionDecorations,
+    );
+
+    this.outputChannel.appendLine(
+      `[DecorationManager] ✅ Decorations applied to editor: ${editor.document.fileName}`,
     );
 
     // Clear the queue
