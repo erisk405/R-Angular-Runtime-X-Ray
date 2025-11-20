@@ -1,0 +1,23 @@
+[package]
+name = "angular-xray-native"
+version = "0.1.0"
+edition = "2021"
+
+[lib]
+crate-type = ["cdylib"]
+
+[dependencies]
+napi = "2.16.0"
+napi-derive = "2.16.0"
+walkdir = "2.4.0"
+swc_common = { version = "17", features = ["sourcemap"] }
+swc_ecma_parser = "27"
+swc_ecma_ast = "18"
+
+[build-dependencies]
+napi-build = "2.1.0"
+
+[profile.release]
+lto = true
+opt-level = 3
+strip = true

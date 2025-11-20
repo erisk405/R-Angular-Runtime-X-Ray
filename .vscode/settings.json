@@ -1,0 +1,18 @@
+{
+  "files.exclude": {
+    "out": false,
+    "node_modules": true,
+    "target": true,
+    "**/*.vsix": true
+  },
+  "search.exclude": {
+    "out": true,
+    "node_modules": true,
+    "target": true
+  },
+  "typescript.tsc.autoDetect": "on",
+  "editor.formatOnSave": true,
+  "editor.codeActionsOnSave": {
+    "source.organizeImports": "explicit"
+  }
+}

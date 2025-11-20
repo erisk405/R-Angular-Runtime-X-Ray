@@ -1,0 +1,14 @@
+.vscode/**
+.vscode-test/**
+src/**
+native/**
+probe/**
+.gitignore
+tsconfig.json
+*.vsix
+node_modules/**
+out/**/*.map
+.DS_Store
+target/**
+Cargo.toml
+Cargo.lock

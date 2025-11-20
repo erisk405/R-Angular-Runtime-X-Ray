@@ -1,0 +1,57 @@
+{
+  "name": "angular-runtime-xray",
+  "displayName": "Angular Runtime X-Ray",
+  "description": "Real-time performance visualization for Angular applications",
+  "version": "0.1.0",
+  "publisher": "angular-xray",
+  "engines": {
+    "vscode": "^1.85.0"
+  },
+  "categories": [
+    "Debuggers",
+    "Visualization"
+  ],
+  "activationEvents": [
+    "onLanguage:typescript",
+    "onCommand:angularXray.analyzeWithAI"
+  ],
+  "main": "./out/extension.js",
+  "contributes": {
+    "commands": [
+      {
+        "command": "angularXray.analyzeWithAI",
+        "title": "Analyze Performance with AI"
+      }
+    ]
+  },
+  "scripts": {
+    "vscode:prepublish": "npm run compile",
+    "compile": "tsc -p ./",
+    "watch": "tsc -watch -p ./",
+    "build:rust": "cargo-cp-artifact -nc native/index.node -- cargo build --manifest-path=native/Cargo.toml --message-format=json-render-diagnostics --release",
+    "build:rust:debug": "cargo-cp-artifact -nc native/index.node -- cargo build --manifest-path=native/Cargo.toml --message-format=json-render-diagnostics",
+    "package": "vsce package"
+  },
+  "dependencies": {
+    "ws": "^8.16.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20.11.0",
+    "@types/vscode": "^1.85.0",
+    "@types/ws": "^8.5.10",
+    "cargo-cp-artifact": "^0.1.9",
+    "typescript": "^5.3.3",
+    "@vscode/vsce": "^2.22.0"
+  },
+  "napi": {
+    "name": "native",
+    "triples": {
+      "defaults": true,
+      "additional": [
+        "x86_64-pc-windows-msvc",
+        "x86_64-apple-darwin",
+        "x86_64-unknown-linux-gnu"
+      ]
+    }
+  }
+}
