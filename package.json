@@ -12,17 +12,59 @@
     "Visualization"
   ],
   "activationEvents": [
-    "onLanguage:typescript",
-    "onCommand:angularXray.analyzeWithAI"
+    "onLanguage:typescript"
   ],
   "main": "./out/extension.js",
   "contributes": {
     "commands": [
       {
         "command": "angularXray.analyzeWithAI",
-        "title": "Analyze Performance with AI"
+        "title": "Angular X-Ray: Analyze Performance with AI"
+      },
+      {
+        "command": "angularXray.startCapture",
+        "title": "Angular X-Ray: Start Performance Capture"
+      },
+      {
+        "command": "angularXray.stopCapture",
+        "title": "Angular X-Ray: Stop Performance Capture"
+      },
+      {
+        "command": "angularXray.showFlameGraph",
+        "title": "Angular X-Ray: Show Flame Graph"
+      },
+      {
+        "command": "angularXray.compareSnapshots",
+        "title": "Angular X-Ray: Compare Performance Snapshots"
+      },
+      {
+        "command": "angularXray.manageSnapshots",
+        "title": "Angular X-Ray: Manage Snapshots"
       }
-    ]
+    ],
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "angularXray",
+          "title": "Angular X-Ray",
+          "icon": "$(pulse)"
+        }
+      ]
+    },
+    "views": {
+      "angularXray": [
+        {
+          "type": "webview",
+          "id": "angularXray.flameGraph",
+          "name": "Flame Graph"
+        },
+        {
+          "type": "webview",
+          "id": "angularXray.comparison",
+          "name": "Performance Comparison"
+        }
+      ]
+    }
   },
   "scripts": {
     "vscode:prepublish": "npm run compile",

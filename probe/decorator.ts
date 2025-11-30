@@ -1,16 +1,71 @@
-import { xrayClient } from './websocket-client';
+import { xrayClient } from "./websocket-client";
 
 /**
  * Performance message structure
  */
 interface PerformanceMessage {
-  type: 'performance';
+  type: "performance";
   class: string;
   method: string;
   duration: number;
   file?: string;
   changeDetectionCount?: number;
 }
+
+/**
+ * Enhanced performance message with call stack tracking (V2)
+ */
+interface PerformanceMessageV2 extends PerformanceMessage {
+  callId: string;
+  parentCallId?: string;
+  timestamp: number;
+  stackDepth: number;
+}
+
+/**
+ * Call stack manager for tracking hierarchical method calls
+ */
+class CallStackManager {
+  private callStack: string[] = [];
+  private callIdCounter = 0;
+
+  /**
+   * Generate unique call ID
+   */
+  public generateCallId(): string {
+    return `call_${Date.now()}_${this.callIdCounter++}`;
+  }
+
+  /**
+   * Get the current parent call ID
+   */
+  public getCurrentParent(): string | undefined {
+    return this.callStack[this.callStack.length - 1];
+  }
+
+  /**
+   * Push a new call onto the stack
+   */
+  public pushCall(callId: string): void {
+    this.callStack.push(callId);
+  }
+
+  /**
+   * Pop a call from the stack
+   */
+  public popCall(): void {
+    this.callStack.pop();
+  }
+
+  /**
+   * Get current stack depth
+   */
+  public getDepth(): number {
+    return this.callStack.length;
+  }
+}
+
+export const callStackManager = new CallStackManager();
 
 /**
  * Performance decorator for tracking method execution time
@@ -35,7 +90,7 @@ export function Performance(options?: { file?: string }): MethodDecorator {
   return function (
     target: any,
     propertyKey: string | symbol,
-    descriptor: PropertyDescriptor
+    descriptor: PropertyDescriptor,
   ): PropertyDescriptor {
     const originalMethod = descriptor.value;
     const className = target.constructor.name;
@@ -49,7 +104,7 @@ export function Performance(options?: { file?: string }): MethodDecorator {
         const result = originalMethod.apply(this, args);
 
         // Handle async methods (Promises)
-        if (result && typeof result.then === 'function') {
+        if (result && typeof result.then === "function") {
           return result.then(
             (value: any) => {
               recordPerformance(startTime);
@@ -58,14 +113,13 @@ export function Performance(options?: { file?: string }): MethodDecorator {
             (error: any) => {
               recordPerformance(startTime);
               throw error;
-            }
+            },
           );
         }
 
         // Handle sync methods
         recordPerformance(startTime);
         return result;
-
       } catch (error) {
         recordPerformance(startTime);
         throw error;
@@ -77,11 +131,11 @@ export function Performance(options?: { file?: string }): MethodDecorator {
       const duration = endTime - startTime;
 
       const message: PerformanceMessage = {
-        type: 'performance',
+        type: "performance",
         class: className,
         method: methodName,
         duration,
-        file: options?.file
+        file: options?.file,
       };
 
       xrayClient.send(message);
@@ -145,7 +199,7 @@ export function TrackChangeDetection(): MethodDecorator {
   return function (
     target: any,
     propertyKey: string | symbol,
-    descriptor: PropertyDescriptor
+    descriptor: PropertyDescriptor,
   ): PropertyDescriptor {
     const originalMethod = descriptor.value;
     const componentName = target.constructor.name;
@@ -161,11 +215,11 @@ export function TrackChangeDetection(): MethodDecorator {
       const count = cdTracker.getCount(componentName);
       if (count % 10 === 0) {
         const message: PerformanceMessage = {
-          type: 'performance',
+          type: "performance",
           class: componentName,
-          method: 'ngDoCheck',
+          method: "ngDoCheck",
           duration: 0,
-          changeDetectionCount: count
+          changeDetectionCount: count,
         };
         xrayClient.send(message);
       }
@@ -181,11 +235,13 @@ export function TrackChangeDetection(): MethodDecorator {
  * Enhanced Performance decorator that also tracks change detection
  * for Angular components
  */
-export function PerformanceWithCD(options?: { file?: string }): MethodDecorator {
+export function PerformanceWithCD(options?: {
+  file?: string;
+}): MethodDecorator {
   return function (
     target: any,
     propertyKey: string | symbol,
-    descriptor: PropertyDescriptor
+    descriptor: PropertyDescriptor,
   ): PropertyDescriptor {
     const originalMethod = descriptor.value;
     const className = target.constructor.name;
@@ -197,7 +253,7 @@ export function PerformanceWithCD(options?: { file?: string }): MethodDecorator 
       try {
         const result = originalMethod.apply(this, args);
 
-        if (result && typeof result.then === 'function') {
+        if (result && typeof result.then === "function") {
           return result.then(
             (value: any) => {
               recordPerformanceWithCD(startTime);
@@ -206,13 +262,12 @@ export function PerformanceWithCD(options?: { file?: string }): MethodDecorator 
             (error: any) => {
               recordPerformanceWithCD(startTime);
               throw error;
-            }
+            },
           );
         }
 
         recordPerformanceWithCD(startTime);
         return result;
-
       } catch (error) {
         recordPerformanceWithCD(startTime);
         throw error;
@@ -224,12 +279,111 @@ export function PerformanceWithCD(options?: { file?: string }): MethodDecorator 
       const duration = endTime - startTime;
 
       const message: PerformanceMessage = {
-        type: 'performance',
+        type: "performance",
         class: className,
         method: methodName,
         duration,
         file: options?.file,
-        changeDetectionCount: cdTracker.getCount(className)
+        changeDetectionCount: cdTracker.getCount(className),
+      };
+
+      xrayClient.send(message);
+    }
+
+    return descriptor;
+  };
+}
+
+/**
+ * TrackPerformance decorator with call stack tracking for flame graphs
+ * This is the new recommended decorator that replaces @Performance()
+ *
+ * Usage:
+ * ```typescript
+ * @TrackPerformance()
+ * myMethod() {
+ *   // method body
+ * }
+ * ```
+ *
+ * With file path:
+ * ```typescript
+ * @TrackPerformance({ file: __filename })
+ * myMethod() {
+ *   // method body
+ * }
+ * ```
+ */
+export function TrackPerformance(options?: { file?: string }): MethodDecorator {
+  return function (
+    target: any,
+    propertyKey: string | symbol,
+    descriptor: PropertyDescriptor,
+  ): PropertyDescriptor {
+    const originalMethod = descriptor.value;
+    const className = target.constructor.name;
+    const methodName = String(propertyKey);
+
+    descriptor.value = function (...args: any[]) {
+      const callId = callStackManager.generateCallId();
+      const parentCallId = callStackManager.getCurrentParent();
+      const stackDepth = callStackManager.getDepth();
+      const timestamp = Date.now();
+      
+      callStackManager.pushCall(callId);
+      const startTime = performance.now();
+
+      try {
+        const result = originalMethod.apply(this, args);
+
+        // Handle async methods (Promises)
+        if (result && typeof result.then === "function") {
+          return result.then(
+            (value: any) => {
+              recordPerformanceV2(startTime, callId, parentCallId, stackDepth, timestamp);
+              callStackManager.popCall();
+              return value;
+            },
+            (error: any) => {
+              recordPerformanceV2(startTime, callId, parentCallId, stackDepth, timestamp);
+              callStackManager.popCall();
+              throw error;
+            },
+          );
+        }
+
+        // Handle sync methods
+        recordPerformanceV2(startTime, callId, parentCallId, stackDepth, timestamp);
+        callStackManager.popCall();
+        return result;
+
+      } catch (error) {
+        recordPerformanceV2(startTime, callId, parentCallId, stackDepth, timestamp);
+        callStackManager.popCall();
+        throw error;
+      }
+    };
+
+    function recordPerformanceV2(
+      startTime: number,
+      callId: string,
+      parentCallId: string | undefined,
+      stackDepth: number,
+      timestamp: number,
+    ): void {
+      const endTime = performance.now();
+      const duration = endTime - startTime;
+
+      const message: PerformanceMessageV2 = {
+        type: "performance",
+        class: className,
+        method: methodName,
+        duration,
+        file: options?.file,
+        callId,
+        parentCallId,
+        stackDepth,
+        timestamp,
       };
 
       xrayClient.send(message);

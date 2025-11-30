@@ -1,40 +1,42 @@
 /**
  * Example Angular Component with Performance Monitoring
  *
- * This demonstrates how to use the Angular X-Ray probe decorators
- * to monitor performance in your Angular components.
+ * UPDATED: Now using @TrackPerformance() for flame graph support!
  */
 
-import { Component, OnInit, DoCheck } from '@angular/core';
-import { Performance, TrackChangeDetection, PerformanceWithCD } from '../probe';
+import { Component, OnInit, DoCheck } from "@angular/core";
+import {
+  TrackPerformance,
+  TrackChangeDetection,
+  PerformanceWithCD,
+} from "../probe";
 
 @Component({
-  selector: 'app-sample',
+  selector: "app-sample",
   template: `
     <div>
-      <h1>Sample Component with Performance Monitoring</h1>
+      <h1>Sample Component with Flame Graph Support</h1>
       <button (click)="fastOperation()">Fast Operation</button>
       <button (click)="slowOperation()">Slow Operation</button>
       <button (click)="verySlowOperation()">Very Slow Operation</button>
       <button (click)="asyncOperation()">Async Operation</button>
+      <button (click)="nestedCalls()">Nested Calls (Flame Graph Demo)</button>
     </div>
-  `
+  `,
 })
 export class SampleComponent implements OnInit, DoCheck {
-
   /**
-   * Lifecycle hook with performance monitoring
-   * This will appear in VS Code with execution time
+   * NEW: Using @TrackPerformance() for flame graph support
+   * This will track call hierarchy
    */
-  @Performance()
+  @TrackPerformance()
   ngOnInit(): void {
-    console.log('Component initialized');
+    console.log("Component initialized");
     this.loadInitialData();
   }
 
   /**
    * Track change detection cycles
-   * Apply this to ngDoCheck to monitor how often Angular checks this component
    */
   @TrackChangeDetection()
   ngDoCheck(): void {
@@ -42,81 +44,102 @@ export class SampleComponent implements OnInit, DoCheck {
   }
 
   /**
-   * Fast operation - will show green indicator in VS Code
-   * Execution time: ~5ms
+   * Fast operation - will show in flame graph
    */
-  @Performance()
+  @TrackPerformance()
   fastOperation(): void {
     const result = Array.from({ length: 1000 }, (_, i) => i * 2);
-    console.log('Fast operation completed', result.length);
+    console.log("Fast operation completed", result.length);
   }
 
   /**
    * Slow operation - will show red background in VS Code
-   * Execution time: ~60ms (exceeds 50ms threshold)
+   * AND appear in flame graph with large width
    */
-  @Performance()
+  @TrackPerformance()
   slowOperation(): void {
-    // Simulate slow operation
     let sum = 0;
     for (let i = 0; i < 1000000; i++) {
       sum += Math.sqrt(i);
     }
-    console.log('Slow operation completed', sum);
+    console.log("Slow operation completed", sum);
   }
 
   /**
-   * Very slow operation - will trigger CodeLens with AI analysis
-   * Execution time: ~200ms
+   * Very slow operation - will be prominent in flame graph
    */
-  @Performance()
+  @TrackPerformance()
   verySlowOperation(): void {
-    // Inefficient nested loops - performance problem!
     const data = [];
     for (let i = 0; i < 1000; i++) {
       for (let j = 0; j < 1000; j++) {
         data.push(i * j);
       }
     }
-    console.log('Very slow operation completed', data.length);
+    console.log("Very slow operation completed", data.length);
   }
 
   /**
-   * Async operation - the decorator handles promises automatically
+   * Async operation - decorator handles promises
    */
-  @Performance()
+  @TrackPerformance()
   async asyncOperation(): Promise<void> {
     await this.fetchData();
     await this.processData();
-    console.log('Async operation completed');
+    console.log("Async operation completed");
+  }
+
+  /**
+   * NEW: Demonstrates nested call hierarchy in flame graph
+   * This will show as a tree: nestedCalls → level1 → level2
+   */
+  @TrackPerformance()
+  nestedCalls(): void {
+    console.log("Starting nested calls...");
+    this.level1();
+    this.fastOperation();
+  }
+
+  @TrackPerformance()
+  private level1(): void {
+    // This appears as child of nestedCalls() in flame graph
+    this.level2();
+    const data = Array.from({ length: 5000 }, (_, i) => i * 2);
+    console.log("Level 1 completed", data.length);
+  }
+
+  @TrackPerformance()
+  private level2(): void {
+    // This appears as child of level1() in flame graph
+    // Deepest level - will show in flame graph hierarchy
+    const items = Array.from({ length: 3000 }, (_, i) => i * 3);
+    items.sort((a, b) => b - a);
+    console.log("Level 2 completed", items.length);
   }
 
   /**
    * Combined performance and change detection tracking
-   * This tracks both execution time and how many CD cycles occurred
    */
   @PerformanceWithCD()
   complexOperation(): void {
-    // This method tracks both performance and change detection
     const data = this.transformData();
     this.updateView(data);
   }
 
-  // Helper methods (not decorated)
+  // Helper methods (not decorated - won't appear in flame graph)
 
   private loadInitialData(): void {
-    // Simulate initial data load
-    console.log('Loading initial data...');
+    console.log("Loading initial data...");
   }
 
   private async fetchData(): Promise<any> {
-    // Simulate API call
-    return new Promise(resolve => setTimeout(() => resolve({ data: 'test' }), 50));
+    return new Promise((resolve) =>
+      setTimeout(() => resolve({ data: "test" }), 50),
+    );
   }
 
   private async processData(): Promise<void> {
-    // Simulate data processing
-    return new Promise(resolve => setTimeout(resolve, 30));
+    return new Promise((resolve) => setTimeout(resolve, 30));
   }
 
   private transformData(): any[] {
@@ -124,43 +147,40 @@ export class SampleComponent implements OnInit, DoCheck {
   }
 
   private updateView(data: any[]): void {
-    console.log('Updating view with', data.length, 'items');
+    console.log("Updating view with", data.length, "items");
   }
 }
 
 /**
  * Example Service with Performance Monitoring
  */
-import { Injectable } from '@angular/core';
+import { Injectable } from "@angular/core";
 
 @Injectable({
-  providedIn: 'root'
+  providedIn: "root",
 })
 export class SampleService {
-
-  @Performance()
+  @TrackPerformance()
   getData(): any[] {
-    // Simulate data retrieval
     return Array.from({ length: 1000 }, (_, i) => ({ id: i }));
   }
 
-  @Performance()
+  @TrackPerformance()
   async fetchFromApi(url: string): Promise<any> {
-    // Simulate API call
     const response = await fetch(url);
     return response.json();
   }
 
   /**
-   * This method has a performance problem - excessive DOM manipulation
-   * The AI analysis will suggest using Angular's built-in rendering
+   * This method has a performance problem
+   * Will be very visible in flame graph due to long execution time
    */
-  @Performance()
+  @TrackPerformance()
   problematicMethod(items: any[]): void {
     // ANTI-PATTERN: Direct DOM manipulation in Angular
-    const container = document.getElementById('container');
-    items.forEach(item => {
-      const element = document.createElement('div');
+    const container = document.getElementById("container");
+    items.forEach((item) => {
+      const element = document.createElement("div");
       element.textContent = item.name;
       container?.appendChild(element);
     });
@@ -168,80 +188,102 @@ export class SampleService {
   }
 
   /**
-   * This method has performance issues with RxJS
-   * AI will suggest proper operators and unsubscribe handling
+   * Shows parent-child relationship in flame graph
    */
-  @Performance()
+  @TrackPerformance()
   inefficientRxJS(): void {
-    // ANTI-PATTERN: Not unsubscribing, causing memory leaks
-    this.someObservable.subscribe(data => {
-      // Process data without proper cleanup
+    this.someObservable.subscribe((data) => {
       this.processLargeDataset(data);
     });
   }
 
+  @TrackPerformance()
+  private processLargeDataset(data: any): void {
+    // This will show as child of inefficientRxJS in flame graph
+    for (let i = 0; i < 10000; i++) {
+      // Expensive operation
+    }
+  }
+
   private someObservable: any;
-  private processLargeDataset(data: any): void {}
 }
 
 /**
  * Real-World Example: Data Grid Component
  */
 @Component({
-  selector: 'app-data-grid',
+  selector: "app-data-grid",
   template: `
     <div class="data-grid">
       <div *ngFor="let row of rows; trackBy: trackByFn">
         {{ row.id }} - {{ row.name }}
       </div>
     </div>
-  `
+  `,
 })
 export class DataGridComponent implements OnInit, DoCheck {
   rows: any[] = [];
 
-  @Performance()
+  @TrackPerformance()
   ngOnInit(): void {
     this.loadRows();
   }
 
   @TrackChangeDetection()
   ngDoCheck(): void {
-    // Monitor change detection - if this fires too often,
-    // it indicates a performance problem
+    // Monitor change detection frequency
   }
 
   /**
-   * Loading 10,000 rows - might be slow
-   * VS Code will show this in red if it exceeds 50ms
+   * Loading 10,000 rows
+   * In flame graph, this will show as large block if slow
    */
-  @Performance()
+  @TrackPerformance()
   loadRows(): void {
     this.rows = Array.from({ length: 10000 }, (_, i) => ({
       id: i,
       name: `Row ${i}`,
-      value: Math.random() * 1000
+      value: Math.random() * 1000,
     }));
   }
 
   /**
-   * Proper trackBy function to optimize Angular rendering
-   * This should be fast and show green indicator
+   * Should be fast - will show as small block in flame graph
    */
-  @Performance()
+  @TrackPerformance()
   trackByFn(index: number, item: any): number {
     return item.id;
   }
 
   /**
-   * Filtering operation - could be optimized
+   * Filtering operation
+   * Flame graph will show if this is called during other operations
    */
-  @Performance()
+  @TrackPerformance()
   filterRows(searchTerm: string): void {
-    // This might be slow for large datasets
-    this.rows = this.rows.filter(row =>
-      row.name.toLowerCase().includes(searchTerm.toLowerCase())
+    this.rows = this.rows.filter((row) =>
+      row.name.toLowerCase().includes(searchTerm.toLowerCase()),
     );
-    // AI might suggest: Use virtual scrolling or server-side filtering
   }
 }
+
+/**
+ * FLAME GRAPH WORKFLOW EXAMPLE:
+ *
+ * 1. Click "Nested Calls" button
+ * 2. In VS Code: Ctrl+Shift+P → "Angular X-Ray: Show Flame Graph"
+ * 3. You'll see:
+ *
+ *    ┌──────────────────────────────────────────────┐
+ *    │ nestedCalls (100ms)                          │  ← Root
+ *    ├──────────────────────────────────────────────┤
+ *    │  level1 (60ms)                               │  ← Child
+ *    │  ├─────────────────────────────────────────┐ │
+ *    │  │ level2 (30ms)                           │ │  ← Grandchild
+ *    │  └─────────────────────────────────────────┘ │
+ *    │  fastOperation (20ms)                        │  ← Sibling
+ *    └──────────────────────────────────────────────┘
+ *
+ * 4. Click any block to navigate to source code
+ * 5. Hover to see detailed metrics
+ */

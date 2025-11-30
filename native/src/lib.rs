@@ -5,9 +5,17 @@ use napi_derive::napi;
 
 mod file_locator;
 mod parser;
+mod flame_graph;
+mod storage;
+mod comparison;
 
 use file_locator::FileLocator;
 use parser::TypeScriptParser;
+
+// Re-export new functions
+pub use flame_graph::build_flame_graph_data;
+pub use storage::{compress_snapshot_data, decompress_snapshot_data};
+pub use comparison::compare_performance_snapshots;
 
 #[napi(object)]
 pub struct FileLocation {
