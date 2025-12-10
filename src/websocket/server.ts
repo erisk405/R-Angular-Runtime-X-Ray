@@ -1,11 +1,15 @@
 import * as vscode from 'vscode';
-import { WebSocketServer, WebSocket } from 'ws';
+import { WebSocket, WebSocketServer } from 'ws';
 import { PerformanceMessage } from '../types';
 
 export class XRayWebSocketServer {
   private wss: WebSocketServer | null = null;
   private outputChannel: vscode.OutputChannel;
   private onMessageCallback?: (message: PerformanceMessage) => void;
+  private clients: Set<WebSocket> = new Set();
+  private onClientConnectedCallback?: () => void;
+  private onClientDisconnectedCallback?: () => void;
+  private onErrorCallback?: (error: any) => void;
 
   constructor(outputChannel: vscode.OutputChannel) {
     this.outputChannel = outputChannel;
@@ -27,7 +31,9 @@ export class XRayWebSocketServer {
       });
 
       this.wss.on('connection', (ws: WebSocket) => {
+        this.clients.add(ws);
         this.outputChannel.appendLine('Client connected to Angular X-Ray');
+        this.onClientConnectedCallback?.();
 
         ws.on('message', (data: Buffer) => {
           try {
@@ -39,7 +45,9 @@ export class XRayWebSocketServer {
         });
 
         ws.on('close', () => {
+          this.clients.delete(ws);
           this.outputChannel.appendLine('Client disconnected from Angular X-Ray');
+          this.onClientDisconnectedCallback?.();
         });
 
         ws.on('error', (error) => {
@@ -50,12 +58,12 @@ export class XRayWebSocketServer {
       this.wss.on('error', (error: NodeJS.ErrnoException) => {
         if (error.code === 'EADDRINUSE') {
           this.outputChannel.appendLine(
-            'ERROR: Port 3333 is already in use. WebSocket server could not start.'
+            'Port 3333 is already in use. Angular X-Ray WebSocket server could not start.'
           );
-          // Do not terminate the extension - as per requirement
         } else {
           this.outputChannel.appendLine(`WebSocket server error: ${error.message}`);
         }
+        this.onErrorCallback?.(error);
       });
 
     } catch (error) {
@@ -80,6 +88,34 @@ export class XRayWebSocketServer {
    */
   public onMessage(callback: (message: PerformanceMessage) => void): void {
     this.onMessageCallback = callback;
+  }
+
+  /**
+   * Get the number of connected clients
+   */
+  public getClientCount(): number {
+    return this.clients.size;
+  }
+
+  /**
+   * Set callback for when a client connects
+   */
+  public onClientConnected(callback: () => void): void {
+    this.onClientConnectedCallback = callback;
+  }
+
+  /**
+   * Set callback for when a client disconnects
+   */
+  public onClientDisconnected(callback: () => void): void {
+    this.onClientDisconnectedCallback = callback;
+  }
+
+  /**
+   * Set callback for when an error occurs
+   */
+  public onError(callback: (error: any) => void): void {
+    this.onErrorCallback = callback;
   }
 
   /**

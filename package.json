@@ -1,16 +1,49 @@
 {
   "name": "angular-runtime-xray",
   "displayName": "Angular Runtime X-Ray",
-  "description": "Real-time performance visualization for Angular applications",
+  "description": "Real-time performance monitoring and visualization for Angular applications with AI-powered optimization suggestions",
   "version": "0.1.0",
   "publisher": "angular-xray",
+  "author": {
+    "name": "Angular X-Ray Team",
+    "email": "contact@angular-xray.dev"
+  },
+  "license": "MIT",
+  "homepage": "https://github.com/angular-xray/angular-runtime-xray",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/angular-xray/angular-runtime-xray.git"
+  },
+  "bugs": {
+    "url": "https://github.com/angular-xray/angular-runtime-xray/issues"
+  },
   "engines": {
     "vscode": "^1.85.0"
   },
   "categories": [
     "Debuggers",
-    "Visualization"
+    "Visualization",
+    "Other"
   ],
+  "keywords": [
+    "angular",
+    "performance",
+    "monitoring",
+    "visualization",
+    "debugging",
+    "profiling",
+    "optimization",
+    "ai",
+    "rust",
+    "typescript",
+    "real-time",
+    "flame-graph"
+  ],
+  "icon": "icon.png",
+  "galleryBanner": {
+    "color": "#dd0031",
+    "theme": "dark"
+  },
   "activationEvents": [
     "onLanguage:typescript"
   ],
@@ -40,6 +73,14 @@
       {
         "command": "angularXray.manageSnapshots",
         "title": "Angular X-Ray: Manage Snapshots"
+      },
+      {
+        "command": "angularXray.setupProbe",
+        "title": "Angular X-Ray: Setup Performance Monitoring"
+      },
+      {
+        "command": "angularXray.showStatus",
+        "title": "Angular X-Ray: Show Status"
       }
     ],
     "viewsContainers": {
@@ -56,12 +97,14 @@
         {
           "type": "webview",
           "id": "angularXray.flameGraph",
-          "name": "Flame Graph"
+          "name": "Flame Graph",
+          "icon": "$(graph)"
         },
         {
           "type": "webview",
           "id": "angularXray.comparison",
-          "name": "Performance Comparison"
+          "name": "Performance Comparison",
+          "icon": "$(compare-changes)"
         }
       ]
     }

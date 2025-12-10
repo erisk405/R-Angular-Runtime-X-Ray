@@ -1,6 +1,7 @@
 import * as fs from "fs";
 import * as vscode from "vscode";
 import { AIPromptGenerator } from "./ai/promptGenerator";
+import { ProbeSetupManager } from "./commands/setupProbe";
 import { SnapshotCaptureManager } from "./storage/captureManager";
 import { SnapshotStorageManager } from "./storage/snapshotManager";
 import {
@@ -9,6 +10,7 @@ import {
   PerformanceMessage,
   PerformanceMessageV2,
 } from "./types";
+import { ConnectionStatus, StatusBarManager } from "./ui/statusBar";
 import { CallStackBuilder } from "./visualization/callStackBuilder";
 import { PerformanceCodeLensProvider } from "./visualization/codeLensProvider";
 import { ComparisonViewProvider } from "./visualization/comparisonView";
@@ -30,11 +32,18 @@ export function activate(context: vscode.ExtensionContext) {
   const outputChannel = vscode.window.createOutputChannel("Angular X-Ray");
   outputChannel.appendLine("Angular Runtime X-Ray extension activated");
 
+  // Initialize UI components
+  const statusBarManager = new StatusBarManager();
+  const probeSetupManager = new ProbeSetupManager(outputChannel);
+
   // Initialize existing components
   const wsServer = new XRayWebSocketServer(outputChannel);
   const decorationManager = new DecorationManager(outputChannel);
   const codeLensProvider = new PerformanceCodeLensProvider();
   const promptGenerator = new AIPromptGenerator();
+
+  // Update status bar when server starts
+  statusBarManager.updateStatus(ConnectionStatus.Connecting);
 
   // Initialize NEW components
   const storageManager = new SnapshotStorageManager(context, nativeModule);
@@ -53,8 +62,31 @@ export function activate(context: vscode.ExtensionContext) {
   // Store performance data
   const performanceStore = new Map<string, MethodPerformanceData>();
 
-  // Start WebSocket server
+  // Start WebSocket server with status updates
   wsServer.start();
+
+  // Update status bar when server is ready
+  setTimeout(() => {
+    statusBarManager.updateStatus(ConnectionStatus.Connected, { clientCount: 0, port: 3333 });
+  }, 1000);
+
+  // Listen for WebSocket events to update status
+  wsServer.onClientConnected(() => {
+    const clientCount = wsServer.getClientCount();
+    statusBarManager.updateStatus(ConnectionStatus.Connected, { clientCount });
+    outputChannel.appendLine(`Client connected. Total clients: ${clientCount}`);
+  });
+
+  wsServer.onClientDisconnected(() => {
+    const clientCount = wsServer.getClientCount();
+    statusBarManager.updateStatus(ConnectionStatus.Connected, { clientCount });
+    outputChannel.appendLine(`Client disconnected. Total clients: ${clientCount}`);
+  });
+
+  wsServer.onError((error) => {
+    statusBarManager.updateStatus(ConnectionStatus.Error);
+    outputChannel.appendLine(`WebSocket error: ${error}`);
+  });
 
   // Register CodeLens provider for TypeScript files
   const codeLensDisposable = vscode.languages.registerCodeLensProvider(
@@ -76,6 +108,9 @@ export function activate(context: vscode.ExtensionContext) {
 
   // Handle incoming performance messages
   wsServer.onMessage((message: PerformanceMessage | any) => {
+    // Update status bar with data received
+    statusBarManager.recordDataReceived();
+
     // Handle batch messages
     if (message.type === "batch" && message.messages) {
       message.messages.forEach((msg: PerformanceMessage) => {
@@ -106,6 +141,20 @@ export function activate(context: vscode.ExtensionContext) {
   );
 
   // Register NEW commands
+  const setupProbeCommand = vscode.commands.registerCommand(
+    "angularXray.setupProbe",
+    async () => {
+      await probeSetupManager.setupProbe();
+    }
+  );
+
+  const showStatusCommand = vscode.commands.registerCommand(
+    "angularXray.showStatus",
+    async () => {
+      await statusBarManager.showStatusDetails();
+    }
+  );
+
   const startCaptureCommand = vscode.commands.registerCommand(
     "angularXray.startCapture",
     async () => {
@@ -271,6 +320,8 @@ export function activate(context: vscode.ExtensionContext) {
     outputChannel,
     codeLensDisposable,
     analyzeCommand,
+    setupProbeCommand,
+    showStatusCommand,
     startCaptureCommand,
     stopCaptureCommand,
     showFlameGraphCommand,
@@ -279,6 +330,7 @@ export function activate(context: vscode.ExtensionContext) {
     { dispose: () => wsServer.stop() },
     { dispose: () => decorationManager.dispose() },
     { dispose: () => codeLensProvider.dispose() },
+    { dispose: () => statusBarManager.dispose() },
   );
 
   /**

@@ -1,215 +1,242 @@
 # Angular Runtime X-Ray
 
-A powerful VS Code extension that provides real-time performance visualization for Angular applications. Monitor method execution times, track change detection cycles, and get AI-powered optimization suggestions.
+🚀 **Real-time performance monitoring for Angular applications**
 
-## Features
+Monitor method execution times, visualize performance bottlenecks, and get AI-powered optimization suggestions - all directly in VS Code!
 
-### 🚀 Real-Time Performance Monitoring
-- Track method execution times in real-time
-- Visual indicators for slow methods (>50ms)
-- Performance metrics displayed inline in your code
+[![Visual Studio Marketplace Version](https://img.shields.io/visual-studio-marketplace/v/angular-xray.angular-runtime-xray)](https://marketplace.visualstudio.com/items?itemName=angular-xray.angular-runtime-xray)
+[![Visual Studio Marketplace Downloads](https://img.shields.io/visual-studio-marketplace/d/angular-xray.angular-runtime-xray)](https://marketplace.visualstudio.com/items?itemName=angular-xray.angular-runtime-xray)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
-### 🔍 Intelligent Code Analysis
-- Rust-powered file searching and code parsing for blazing-fast performance
-- Automatic method location detection
-- Two-phase file location strategy
+## ✨ Features
 
-### 📊 Visual Performance Indicators
-- Red background highlighting for slow methods
-- Green indicators for fast methods
-- Hover tooltips with detailed performance statistics
-- Change detection cycle tracking for Angular components
+### 🔍 Real-Time Performance Monitoring
+
+- **Track method execution times** as you develop
+- **Visual indicators** for slow methods (>50ms)
+- **Performance metrics** displayed inline in your code
+- **Zero configuration** - works out of the box
+
+### 📊 Smart Visualizations
+
+- **🔴 Red highlighting** for slow methods
+- **🟢 Green indicators** for optimized code
+- **📋 Hover tooltips** with detailed statistics
+- **🔄 Change detection tracking** for Angular components
 
 ### 🤖 AI-Powered Analysis
-- One-click AI analysis for slow methods
-- Generates comprehensive prompts with code context and metrics
-- Copy-to-clipboard for easy sharing with AI assistants
 
-## Installation
+- **One-click AI analysis** for performance issues
+- **Generates comprehensive optimization prompts**
+- **Copy-to-clipboard** for easy sharing with AI assistants
+- **Smart suggestions** based on your code patterns
 
-### Prerequisites
-1. **Rust Toolchain**: Install from [rustup.rs](https://rustup.rs/)
-2. **Node.js**: Version 18 or higher
-3. **VS Code**: Version 1.85.0 or higher
+### ⚡ Blazing Fast Performance
 
-### Building the Extension
+- **Rust-powered** file searching and parsing
+- **Minimal overhead** on your VS Code
+- **Real-time WebSocket** communication
+- **Cross-platform** support (Windows, macOS, Linux)
 
-```bash
-# Install dependencies
-npm install
+## 🚀 Quick Start
 
-# Build the Rust native module
-npm run build:rust
+### 1. Install Extension
 
-# Compile TypeScript
-npm run compile
+**From VS Code Marketplace:**
 
-# Package the extension
-npm run package
-```
+1. Open VS Code
+2. Go to Extensions (`Ctrl+Shift+X`)
+3. Search for "Angular Runtime X-Ray"
+4. Click **Install**
 
-This will create a `.vsix` file that you can install in VS Code.
-
-### Installing the Extension
+**Or install directly:**
 
 ```bash
-code --install-extension angular-runtime-xray-0.1.0.vsix
+code --install-extension angular-xray.angular-runtime-xray
 ```
 
-Or in VS Code:
-1. Open the Extensions view (Ctrl+Shift+X)
-2. Click the "..." menu
-3. Select "Install from VSIX..."
-4. Choose the generated `.vsix` file
+### 2. Setup Your Angular Project
 
-## Usage
+Run the setup command in VS Code:
 
-### 1. Set Up the Runtime Probe
+- Open Command Palette (`Ctrl+Shift+P`)
+- Type: `Angular X-Ray: Setup Performance Monitoring`
+- Follow the prompts
 
-Copy the `probe` folder to your Angular project and import the decorators:
+**Or manually add decorators:**
 
 ```typescript
-import { Performance, TrackChangeDetection } from './probe';
+import { Performance } from './probe';
 
-@Component({
-  selector: 'app-my-component',
-  templateUrl: './my-component.html'
-})
+@Component({...})
 export class MyComponent {
   @Performance()
-  expensiveOperation() {
+  expensiveMethod() {
     // This method will be monitored
-    const result = this.heavyComputation();
-    return result;
-  }
-
-  @TrackChangeDetection()
-  ngDoCheck() {
-    // Track change detection cycles
+    return this.heavyComputation();
   }
 }
 ```
 
-### 2. Run Your Angular Application
-
-Start your Angular development server as usual:
+### 3. Run Your App
 
 ```bash
 ng serve
 ```
 
-The probe will automatically connect to the X-Ray extension on port 3333.
+**That's it!** The extension automatically connects and starts monitoring.
 
-### 3. View Performance Data
+## 📸 Screenshots
 
-- **Inline Decorations**: Slow methods (>50ms) show red backgrounds with execution times
-- **Hover Information**: Hover over decorated methods to see detailed statistics
-- **CodeLens**: Click "Analyze with AI" above slow methods to get optimization suggestions
+> 🚧 Screenshots will be added soon showing the extension in action
 
-### 4. AI Analysis
+## 📋 Requirements
 
-When you click the CodeLens above a slow method:
-1. A comprehensive analysis prompt is generated
-2. The prompt is automatically copied to your clipboard
-3. Paste it into your preferred AI assistant (ChatGPT, Claude, etc.)
-4. Get specific optimization recommendations
+- **VS Code**: 1.85.0 or higher
+- **Angular project** (any version)
+- **No additional setup** required!
 
-## Architecture
+## 🛠️ How It Works
 
-### Hybrid TypeScript + Rust Design
+### Real-Time Monitoring
 
-- **TypeScript**: VS Code extension host, UI, WebSocket server
-- **Rust Native Module**: High-performance file searching and TypeScript parsing
-- **napi-rs**: Seamless Node.js ↔ Rust FFI bindings
+1. **Add decorators** to methods you want to monitor
+2. **Run your Angular app** - the extension connects automatically
+3. **See performance data** in VS Code as you interact with your app
+4. **Get AI suggestions** for slow methods with one click
 
-### Performance Benefits
+### Visual Feedback
 
-The Rust native module provides significant performance improvements:
-- **File Search**: 10-100x faster than Node.js implementations
-- **Code Parsing**: Uses SWC for lightning-fast TypeScript parsing
-- **Memory Efficient**: Minimal overhead on your VS Code instance
+- **🔴 Red background**: Methods taking >50ms
+- **📊 Inline metrics**: Execution time displayed in your code
+- **💡 CodeLens**: "Analyze with AI" button appears above slow methods
+- **📈 Hover details**: Detailed statistics on hover
 
-## Configuration
+### AI Integration
 
-The extension works out of the box with no configuration required. However, you can customize:
+When you click "Analyze with AI":
 
-### WebSocket Port
-By default, the extension uses port 3333. If you need to change this:
-1. Modify `src/websocket/server.ts`
-2. Update the probe's `probe/websocket-client.ts` to match
+1. 🧠 **Comprehensive analysis prompt** is generated
+2. 📋 **Automatically copied** to your clipboard
+3. 🤖 **Paste into any AI assistant** (ChatGPT, Claude, etc.)
+4. 💡 **Get specific optimization recommendations**
 
-## Requirements Compliance
+## 🎯 Use Cases
 
-This extension fully implements the following requirements:
+- **🐌 Find slow methods** in your Angular components
+- **🔍 Identify performance bottlenecks** during development
+- **📊 Monitor change detection** performance
+- **🤖 Get AI-powered optimization tips**
+- **⚡ Improve app performance** before deployment
 
-✅ **Requirement 1**: VS Code extension infrastructure with Rust native modules  
-✅ **Requirement 2**: Runtime probe with performance decorators  
-✅ **Requirement 3**: Visualization with Rust-powered file parsing  
-✅ **Requirement 4**: AI analysis integration with CodeLens  
+## 🏗️ Architecture
 
-## Troubleshooting
+### Why Angular Runtime X-Ray is Fast
 
-### Port 3333 Already in Use
-The extension will log an error but continue running. Check the Output Channel (View → Output → Angular X-Ray) for details.
+- **🦀 Rust Native Module**: 10-100x faster file searching and parsing
+- **⚡ SWC Parser**: Lightning-fast TypeScript code analysis
+- **🔌 WebSocket Communication**: Real-time data streaming
+- **💾 Memory Efficient**: Minimal VS Code overhead
 
-### Native Module Not Loading
-Ensure Rust is properly installed and the module is built:
+### Technology Stack
+
+- **TypeScript**: VS Code extension host and UI
+- **Rust**: High-performance native module
+- **WebSocket**: Real-time communication
+- **napi-rs**: Seamless Node.js ↔ Rust integration
+
+## ⚙️ Configuration
+
+**No configuration needed!** The extension works out of the box.
+
+### Optional Customization
+
+- **WebSocket Port**: Default 3333 (can be changed if needed)
+- **Performance Threshold**: Default 50ms for "slow" method detection
+- **AI Prompt Templates**: Customizable analysis prompts
+
+## 🎉 Why Choose Angular Runtime X-Ray?
+
+✅ **Zero Configuration** - Install and start monitoring immediately  
+✅ **Real-time Feedback** - See performance as you code  
+✅ **AI-Powered Insights** - Get smart optimization suggestions  
+✅ **Blazing Fast** - Rust-powered performance analysis  
+✅ **Developer Friendly** - Integrates seamlessly with your workflow  
+✅ **Cross-Platform** - Works on Windows, macOS, and Linux
+
+## 🆘 Support & Troubleshooting
+
+### Common Issues
+
+**Extension not activating?**
+
+- Check VS Code version (requires 1.85.0+)
+- Look for errors in Output → Angular X-Ray
+
+**Probe not connecting?**
+
+- Ensure your Angular app is running (`ng serve`)
+- Check browser console for connection errors
+- Verify port 3333 isn't blocked by firewall
+
+**Need help?**
+
+- 📖 Check our [documentation](https://github.com/angular-xray/angular-runtime-xray)
+- 🐛 [Report issues](https://github.com/angular-xray/angular-runtime-xray/issues)
+- 💬 [Join discussions](https://github.com/angular-xray/angular-runtime-xray/discussions)
+
+## 🤝 Contributing
+
+We welcome contributions! Here's how to get started:
+
+### Development Setup
+
 ```bash
+# Clone the repository
+git clone https://github.com/angular-xray/angular-runtime-xray.git
+
+# Install dependencies
+npm install
+
+# Build Rust module
 npm run build:rust
+
+# Start development
+npm run watch
 ```
 
-### Probe Not Connecting
-1. Verify your Angular app is running
-2. Check browser console for connection errors
-3. Ensure WebSocket connections aren't blocked by firewalls
+### Contributing Guidelines
 
-## Development
+- 🧪 Ensure tests pass (`cargo test`)
+- 📝 Follow existing code style
+- 📖 Update documentation as needed
+- 🐛 Include tests for new features
 
-### Project Structure
-```
-/
-├── src/                    # TypeScript extension code
-│   ├── extension.ts        # Main entry point
-│   ├── websocket/          # WebSocket server
-│   ├── visualization/      # Decorations and CodeLens
-│   └── ai/                 # AI prompt generation
-├── native/                 # Rust native module
-│   ├── src/
-│   │   ├── lib.rs          # FFI exports
-│   │   ├── file_locator.rs # File search engine
-│   │   └── parser.rs       # TypeScript parser
-│   └── Cargo.toml
-├── probe/                  # Browser-side runtime probe
-│   ├── decorator.ts        # Performance decorators
-│   └── websocket-client.ts # WebSocket client
-└── package.json
-```
-
-### Building for Development
+### Development Commands
 
 ```bash
-# Watch mode for TypeScript
-npm run watch
-
-# Build Rust in debug mode
-npm run build:rust:debug
+npm run watch          # Watch TypeScript changes
+npm run build:rust     # Build Rust module (release)
+npm run build:rust:debug # Build Rust module (debug)
+npm run package        # Create .vsix package
 ```
 
-## Contributing
+## 📄 License
 
-Contributions are welcome! Please ensure:
-1. Rust code passes `cargo test`
-2. TypeScript compiles without errors
-3. Follow the existing code style
+MIT License - See [LICENSE](LICENSE) file for details.
 
-## License
+## 🙏 Credits
 
-MIT License - See LICENSE file for details
+Built with amazing open-source technologies:
 
-## Credits
+- 🦀 [Rust](https://www.rust-lang.org/) - Systems programming language
+- 🔗 [napi-rs](https://napi.rs/) - Node.js native addons
+- ⚡ [SWC](https://swc.rs/) - TypeScript/JavaScript parser
+- 🔌 [WebSocket](https://github.com/websockets/ws) - Real-time communication
+- 🎨 [VS Code API](https://code.visualstudio.com/api) - Extension platform
 
-Built with:
-- [napi-rs](https://napi.rs/) - Node.js native addons
-- [SWC](https://swc.rs/) - TypeScript/JavaScript parser
-- [walkdir](https://github.com/BurntSushi/walkdir) - Fast directory traversal
-- [ws](https://github.com/websockets/ws) - WebSocket implementation
+---
+
+**⭐ If you find Angular Runtime X-Ray helpful, please give it a star on [GitHub](https://github.com/angular-xray/angular-runtime-xray)!**
+
+**🚀 Happy coding and optimizing your Angular applications!**
