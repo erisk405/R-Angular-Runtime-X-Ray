@@ -43,7 +43,6 @@ struct FlameGraphNode {
 ///
 /// # Returns
 /// JSON string containing flame graph data structure
-#[napi]
 pub fn build_flame_graph_data(call_stack_json: String) -> Result<String> {
     // Parse input
     let calls: Vec<CallStackInput> = serde_json::from_str(&call_stack_json)
@@ -53,7 +52,8 @@ pub fn build_flame_graph_data(call_stack_json: String) -> Result<String> {
         return Ok(serde_json::json!({
             "nodes": [],
             "totalDuration": 0.0
-        }).to_string());
+        })
+        .to_string());
     }
 
     // Build call map for O(1) lookups

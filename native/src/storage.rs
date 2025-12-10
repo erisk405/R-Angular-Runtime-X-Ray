@@ -12,7 +12,6 @@ use std::io::{Read, Write};
 ///
 /// # Returns
 /// Compressed buffer
-#[napi]
 pub fn compress_snapshot_data(snapshot_json: String) -> Result<Buffer> {
     let mut encoder = GzEncoder::new(Vec::new(), Compression::best());
 
@@ -34,7 +33,6 @@ pub fn compress_snapshot_data(snapshot_json: String) -> Result<Buffer> {
 ///
 /// # Returns
 /// Decompressed JSON string
-#[napi]
 pub fn decompress_snapshot_data(compressed_data: Buffer) -> Result<String> {
     let mut decoder = GzDecoder::new(&compressed_data[..]);
     let mut decompressed = String::new();
@@ -69,9 +67,12 @@ mod tests {
             if i > 0 {
                 large_json.push(',');
             }
-            large_json.push_str(&format!(r#""method{}":{{
+            large_json.push_str(&format!(
+                r#""method{}":{{
 
-"duration":100,"executions":[1,2,3,4,5]}}"#, i));
+"duration":100,"executions":[1,2,3,4,5]}}"#,
+                i
+            ));
         }
         large_json.push('}');
 
@@ -82,7 +83,10 @@ mod tests {
         let compression_ratio = (compressed_size as f64 / original_size as f64) * 100.0;
 
         // Should achieve at least 70% compression on repetitive data
-        assert!(compression_ratio < 30.0,
-            "Compression ratio too low: {}%", compression_ratio);
+        assert!(
+            compression_ratio < 30.0,
+            "Compression ratio too low: {}%",
+            compression_ratio
+        );
     }
 }

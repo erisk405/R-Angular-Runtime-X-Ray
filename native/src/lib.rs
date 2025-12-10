@@ -3,19 +3,14 @@
 use napi::bindgen_prelude::*;
 use napi_derive::napi;
 
+pub mod comparison;
 mod file_locator;
+pub mod flame_graph;
 mod parser;
-mod flame_graph;
-mod storage;
-mod comparison;
+pub mod storage;
 
 use file_locator::FileLocator;
 use parser::TypeScriptParser;
-
-// Re-export new functions
-pub use flame_graph::build_flame_graph_data;
-pub use storage::{compress_snapshot_data, decompress_snapshot_data};
-pub use comparison::compare_performance_snapshots;
 
 #[napi(object)]
 pub struct FileLocation {
@@ -74,4 +69,29 @@ pub fn parse_method(file_content: String, method_name: String) -> Result<MethodL
         }),
         Err(e) => Err(Error::from_reason(format!("Failed to parse method: {}", e))),
     }
+}
+
+// Wrapper functions to properly export NAPI functions from modules
+#[napi]
+pub fn build_flame_graph_data(call_stack_json: String) -> Result<String> {
+    flame_graph::build_flame_graph_data(call_stack_json)
+}
+
+#[napi]
+pub fn compress_snapshot_data(snapshot_json: String) -> Result<Buffer> {
+    storage::compress_snapshot_data(snapshot_json)
+}
+
+#[napi]
+pub fn decompress_snapshot_data(compressed_data: Buffer) -> Result<String> {
+    storage::decompress_snapshot_data(compressed_data)
+}
+
+#[napi]
+pub fn compare_performance_snapshots(
+    baseline_json: String,
+    current_json: String,
+    regression_threshold: f64,
+) -> Result<String> {
+    comparison::compare_performance_snapshots(baseline_json, current_json, regression_threshold)
 }

@@ -1,25 +1,27 @@
 import * as fs from "fs";
 import * as vscode from "vscode";
 import { AIPromptGenerator } from "./ai/promptGenerator";
+import { SnapshotCaptureManager } from "./storage/captureManager";
+import { SnapshotStorageManager } from "./storage/snapshotManager";
 import {
   MethodPerformanceData,
   NativeModule,
   PerformanceMessage,
   PerformanceMessageV2,
 } from "./types";
-import { PerformanceCodeLensProvider } from "./visualization/codeLensProvider";
-import { DecorationManager } from "./visualization/decorationManager";
-import { XRayWebSocketServer } from "./websocket/server";
 import { CallStackBuilder } from "./visualization/callStackBuilder";
-import { FlameGraphViewProvider } from "./visualization/flameGraphView";
+import { PerformanceCodeLensProvider } from "./visualization/codeLensProvider";
 import { ComparisonViewProvider } from "./visualization/comparisonView";
-import { SnapshotStorageManager } from "./storage/snapshotManager";
-import { SnapshotCaptureManager } from "./storage/captureManager";
+import { DecorationManager } from "./visualization/decorationManager";
+import { FlameGraphViewProvider } from "./visualization/flameGraphView";
+import { XRayWebSocketServer } from "./websocket/server";
 
 // Import the native Rust module
 let nativeModule: NativeModule;
 try {
   nativeModule = require("../native/index.node");
+  console.log("Native module loaded successfully");
+  console.log("Available functions:", Object.keys(nativeModule));
 } catch (error) {
   console.error("Failed to load native module:", error);
 }

@@ -32,7 +32,6 @@ struct ComparisonResult {
 ///
 /// # Returns
 /// JSON string containing array of comparison results
-#[napi]
 pub fn compare_performance_snapshots(
     baseline_json: String,
     current_json: String,
@@ -136,24 +135,22 @@ mod tests {
             "ClassB.method2": {"averageDuration": 45.0, "executions": [45.0]}
         }"#;
 
-        let result = compare_performance_snapshots(
-            baseline.to_string(),
-            current.to_string(),
-            5.0,
-        )
-        .unwrap();
+        let result =
+            compare_performance_snapshots(baseline.to_string(), current.to_string(), 5.0).unwrap();
 
         let parsed: Vec<serde_json::Value> = serde_json::from_str(&result).unwrap();
 
         // Find method1 (regressed by 10%)
-        let method1 = parsed.iter()
+        let method1 = parsed
+            .iter()
             .find(|r| r["methodKey"] == "ClassA.method1")
             .unwrap();
         assert_eq!(method1["diffType"], "regressed");
         assert_eq!(method1["percentageChange"], 10.0);
 
         // Find method2 (improved by 10%)
-        let method2 = parsed.iter()
+        let method2 = parsed
+            .iter()
             .find(|r| r["methodKey"] == "ClassB.method2")
             .unwrap();
         assert_eq!(method2["diffType"], "improved");
@@ -170,26 +167,18 @@ mod tests {
             "ClassB.newMethod": {"averageDuration": 50.0, "executions": [50.0]}
         }"#;
 
-        let result = compare_performance_snapshots(
-            baseline.to_string(),
-            current.to_string(),
-            5.0,
-        )
-        .unwrap();
+        let result =
+            compare_performance_snapshots(baseline.to_string(), current.to_string(), 5.0).unwrap();
 
         let parsed: Vec<serde_json::Value> = serde_json::from_str(&result).unwrap();
         assert_eq!(parsed.len(), 2);
 
         // Check for removed method
-        let removed = parsed.iter()
-            .find(|r| r["diffType"] == "removed")
-            .unwrap();
+        let removed = parsed.iter().find(|r| r["diffType"] == "removed").unwrap();
         assert_eq!(removed["methodKey"], "ClassA.oldMethod");
 
         // Check for new method
-        let new = parsed.iter()
-            .find(|r| r["diffType"] == "new")
-            .unwrap();
+        let new = parsed.iter().find(|r| r["diffType"] == "new").unwrap();
         assert_eq!(new["methodKey"], "ClassB.newMethod");
     }
 
