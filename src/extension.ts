@@ -1,19 +1,29 @@
 import * as fs from "fs";
 import * as vscode from "vscode";
 import { AIPromptGenerator } from "./ai/promptGenerator";
+import { ProbeSetupManager } from "./commands/setupProbe";
+import { SnapshotCaptureManager } from "./storage/captureManager";
+import { SnapshotStorageManager } from "./storage/snapshotManager";
 import {
   MethodPerformanceData,
   NativeModule,
   PerformanceMessage,
+  PerformanceMessageV2,
 } from "./types";
+import { ConnectionStatus, StatusBarManager } from "./ui/statusBar";
+import { CallStackBuilder } from "./visualization/callStackBuilder";
 import { PerformanceCodeLensProvider } from "./visualization/codeLensProvider";
+import { ComparisonViewProvider } from "./visualization/comparisonView";
 import { DecorationManager } from "./visualization/decorationManager";
+import { FlameGraphViewProvider } from "./visualization/flameGraphView";
 import { XRayWebSocketServer } from "./websocket/server";
 
 // Import the native Rust module
 let nativeModule: NativeModule;
 try {
   nativeModule = require("../native/index.node");
+  console.log("Native module loaded successfully");
+  console.log("Available functions:", Object.keys(nativeModule));
 } catch (error) {
   console.error("Failed to load native module:", error);
 }
@@ -22,17 +32,61 @@ export function activate(context: vscode.ExtensionContext) {
   const outputChannel = vscode.window.createOutputChannel("Angular X-Ray");
   outputChannel.appendLine("Angular Runtime X-Ray extension activated");
 
-  // Initialize components
+  // Initialize UI components
+  const statusBarManager = new StatusBarManager();
+  const probeSetupManager = new ProbeSetupManager(outputChannel);
+
+  // Initialize existing components
   const wsServer = new XRayWebSocketServer(outputChannel);
   const decorationManager = new DecorationManager(outputChannel);
   const codeLensProvider = new PerformanceCodeLensProvider();
   const promptGenerator = new AIPromptGenerator();
 
+  // Update status bar when server starts
+  statusBarManager.updateStatus(ConnectionStatus.Connecting);
+
+  // Initialize NEW components
+  const storageManager = new SnapshotStorageManager(context, nativeModule);
+  const captureManager = new SnapshotCaptureManager();
+  const callStackBuilder = new CallStackBuilder();
+  const flameGraphProvider = new FlameGraphViewProvider(
+    context.extensionUri,
+    nativeModule,
+  );
+  const comparisonProvider = new ComparisonViewProvider(
+    context.extensionUri,
+    nativeModule,
+    storageManager,
+  );
+
   // Store performance data
   const performanceStore = new Map<string, MethodPerformanceData>();
 
-  // Start WebSocket server
+  // Start WebSocket server with status updates
   wsServer.start();
+
+  // Update status bar when server is ready
+  setTimeout(() => {
+    statusBarManager.updateStatus(ConnectionStatus.Connected, { clientCount: 0, port: 3333 });
+  }, 1000);
+
+  // Listen for WebSocket events to update status
+  wsServer.onClientConnected(() => {
+    const clientCount = wsServer.getClientCount();
+    statusBarManager.updateStatus(ConnectionStatus.Connected, { clientCount });
+    outputChannel.appendLine(`Client connected. Total clients: ${clientCount}`);
+  });
+
+  wsServer.onClientDisconnected(() => {
+    const clientCount = wsServer.getClientCount();
+    statusBarManager.updateStatus(ConnectionStatus.Connected, { clientCount });
+    outputChannel.appendLine(`Client disconnected. Total clients: ${clientCount}`);
+  });
+
+  wsServer.onError((error) => {
+    statusBarManager.updateStatus(ConnectionStatus.Error);
+    outputChannel.appendLine(`WebSocket error: ${error}`);
+  });
 
   // Register CodeLens provider for TypeScript files
   const codeLensDisposable = vscode.languages.registerCodeLensProvider(
@@ -40,9 +94,31 @@ export function activate(context: vscode.ExtensionContext) {
     codeLensProvider,
   );
 
+  // Register NEW webview providers
+  context.subscriptions.push(
+    vscode.window.registerWebviewViewProvider(
+      FlameGraphViewProvider.viewType,
+      flameGraphProvider,
+    ),
+    vscode.window.registerWebviewViewProvider(
+      ComparisonViewProvider.viewType,
+      comparisonProvider,
+    ),
+  );
+
   // Handle incoming performance messages
-  wsServer.onMessage((message: PerformanceMessage) => {
-    handlePerformanceMessage(message, outputChannel);
+  wsServer.onMessage((message: PerformanceMessage | any) => {
+    // Update status bar with data received
+    statusBarManager.recordDataReceived();
+
+    // Handle batch messages
+    if (message.type === "batch" && message.messages) {
+      message.messages.forEach((msg: PerformanceMessage) => {
+        handlePerformanceMessage(msg, outputChannel);
+      });
+    } else {
+      handlePerformanceMessage(message, outputChannel);
+    }
   });
 
   // Register AI analysis command
@@ -64,6 +140,176 @@ export function activate(context: vscode.ExtensionContext) {
     },
   );
 
+  // Register NEW commands
+  const setupProbeCommand = vscode.commands.registerCommand(
+    "angularXray.setupProbe",
+    async () => {
+      await probeSetupManager.setupProbe();
+    }
+  );
+
+  const showStatusCommand = vscode.commands.registerCommand(
+    "angularXray.showStatus",
+    async () => {
+      await statusBarManager.showStatusDetails();
+    }
+  );
+
+  const startCaptureCommand = vscode.commands.registerCommand(
+    "angularXray.startCapture",
+    async () => {
+      captureManager.startCapture();
+      vscode.window.showInformationMessage(
+        "Performance capture started. Run your Angular app to collect data.",
+      );
+    },
+  );
+
+  const stopCaptureCommand = vscode.commands.registerCommand(
+    "angularXray.stopCapture",
+    async () => {
+      if (!captureManager.isCaptureActive()) {
+        vscode.window.showWarningMessage("No active capture session.");
+        return;
+      }
+
+      const name = await vscode.window.showInputBox({
+        prompt: "Enter snapshot name",
+        placeHolder: "e.g., After optimization",
+      });
+
+      if (name) {
+        try {
+          await captureManager.stopCapture(name, storageManager);
+          vscode.window.showInformationMessage(
+            `Snapshot '${name}' saved successfully!`,
+          );
+        } catch (error) {
+          vscode.window.showErrorMessage(`Failed to save snapshot: ${error}`);
+        }
+      }
+    },
+  );
+
+  const showFlameGraphCommand = vscode.commands.registerCommand(
+    "angularXray.showFlameGraph",
+    async () => {
+      const callStacks = callStackBuilder.buildCallTree();
+      if (callStacks.length === 0) {
+        vscode.window.showWarningMessage(
+          "No performance data available. Run your Angular app with @TrackPerformance() decorators.",
+        );
+        return;
+      }
+
+      await flameGraphProvider.updateFlameGraph(callStacks);
+      vscode.window.showInformationMessage(
+        `Flame graph updated with ${callStackBuilder.getCallCount()} calls.`,
+      );
+    },
+  );
+
+  const compareSnapshotsCommand = vscode.commands.registerCommand(
+    "angularXray.compareSnapshots",
+    async () => {
+      const snapshots = await storageManager.listSnapshots();
+
+      if (snapshots.length < 2) {
+        vscode.window.showWarningMessage(
+          "Need at least 2 snapshots to compare. Create snapshots using Start/Stop Capture.",
+        );
+        return;
+      }
+
+      const baseline = await vscode.window.showQuickPick(
+        snapshots.map((s) => ({
+          label: s.name,
+          description: new Date(s.timestamp).toLocaleString(),
+          detail: s.gitBranch ? `${s.gitBranch}@${s.gitCommit}` : undefined,
+          id: s.id,
+        })),
+        { placeHolder: "Select baseline snapshot" },
+      );
+
+      if (!baseline) return;
+
+      const current = await vscode.window.showQuickPick(
+        snapshots
+          .filter((s) => s.id !== baseline.id)
+          .map((s) => ({
+            label: s.name,
+            description: new Date(s.timestamp).toLocaleString(),
+            detail: s.gitBranch ? `${s.gitBranch}@${s.gitCommit}` : undefined,
+            id: s.id,
+          })),
+        { placeHolder: "Select current snapshot to compare" },
+      );
+
+      if (!current) return;
+
+      try {
+        await comparisonProvider.compareSnapshots(baseline.id, current.id);
+        vscode.window.showInformationMessage(
+          `Comparing '${baseline.label}' vs '${current.label}'`,
+        );
+      } catch (error) {
+        vscode.window.showErrorMessage(`Failed to compare snapshots: ${error}`);
+      }
+    },
+  );
+
+  const manageSnapshotsCommand = vscode.commands.registerCommand(
+    "angularXray.manageSnapshots",
+    async () => {
+      const snapshots = await storageManager.listSnapshots();
+      const stats = await storageManager.getStorageStats();
+
+      if (snapshots.length === 0) {
+        vscode.window.showInformationMessage("No snapshots saved yet.");
+        return;
+      }
+
+      const items = snapshots.map((s) => ({
+        label: s.name,
+        description: new Date(s.timestamp).toLocaleString(),
+        detail: s.gitBranch ? `${s.gitBranch}@${s.gitCommit}` : undefined,
+        id: s.id,
+      }));
+
+      items.unshift({
+        label: `📊 Storage Stats`,
+        description: `${snapshots.length} snapshots, ${(stats.totalSize / 1024).toFixed(1)}KB`,
+        detail: "Select a snapshot below to delete it",
+        id: "",
+      });
+
+      const selected = await vscode.window.showQuickPick(items, {
+        placeHolder: "Select snapshot to delete (or ESC to cancel)",
+      });
+
+      if (selected && selected.id) {
+        const confirm = await vscode.window.showWarningMessage(
+          `Delete snapshot '${selected.label}'?`,
+          { modal: true },
+          "Delete",
+        );
+
+        if (confirm === "Delete") {
+          try {
+            await storageManager.deleteSnapshot(selected.id);
+            vscode.window.showInformationMessage(
+              `Snapshot '${selected.label}' deleted.`,
+            );
+          } catch (error) {
+            vscode.window.showErrorMessage(
+              `Failed to delete snapshot: ${error}`,
+            );
+          }
+        }
+      }
+    },
+  );
+
   // Handle active editor changes
   vscode.window.onDidChangeActiveTextEditor(() => {
     decorationManager.onActiveEditorChange();
@@ -74,9 +320,17 @@ export function activate(context: vscode.ExtensionContext) {
     outputChannel,
     codeLensDisposable,
     analyzeCommand,
+    setupProbeCommand,
+    showStatusCommand,
+    startCaptureCommand,
+    stopCaptureCommand,
+    showFlameGraphCommand,
+    compareSnapshotsCommand,
+    manageSnapshotsCommand,
     { dispose: () => wsServer.stop() },
     { dispose: () => decorationManager.dispose() },
     { dispose: () => codeLensProvider.dispose() },
+    { dispose: () => statusBarManager.dispose() },
   );
 
   /**
@@ -212,6 +466,17 @@ export function activate(context: vscode.ExtensionContext) {
       // Update visualizations
       decorationManager.queueUpdate(perfData);
       codeLensProvider.updatePerformanceData(perfData);
+
+      // NEW: Handle call stack tracking for flame graphs
+      const msgV2 = message as any;
+      if (msgV2.callId) {
+        callStackBuilder.addCall(msgV2 as PerformanceMessageV2);
+      }
+
+      // NEW: Record data during active capture
+      if (captureManager.isCaptureActive()) {
+        captureManager.recordData(perfData);
+      }
     } catch (error) {
       outputChannel.appendLine(`Error handling performance message: ${error}`);
     }

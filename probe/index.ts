@@ -31,5 +31,12 @@
  * ```
  */
 
-export { Performance, TrackChangeDetection, PerformanceWithCD, cdTracker } from './decorator';
-export { XRayWebSocketClient, xrayClient } from './websocket-client';
+export {
+  Performance,
+  TrackChangeDetection,
+  PerformanceWithCD,
+  TrackPerformance,
+  cdTracker,
+  callStackManager,
+} from "./decorator";
+export { XRayWebSocketClient, xrayClient } from "./websocket-client";
