@@ -39,7 +39,7 @@
     "real-time",
     "flame-graph"
   ],
-  "icon": "icon.png",
+  "icon": "assets/icon.png",
   "galleryBanner": {
     "color": "#dd0031",
     "theme": "dark"
