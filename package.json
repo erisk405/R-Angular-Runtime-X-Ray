@@ -9,13 +9,13 @@
     "email": "contact@angular-xray.dev"
   },
   "license": "MIT",
-  "homepage": "https://github.com/angular-xray/angular-runtime-xray",
+  "homepage": "https://github.com/erisk405/R-Angular-Runtime-X-Ray.git",
   "repository": {
     "type": "git",
-    "url": "https://github.com/angular-xray/angular-runtime-xray.git"
+    "url": "https://github.com/erisk405/R-Angular-Runtime-X-Ray.git"
   },
   "bugs": {
-    "url": "https://github.com/angular-xray/angular-runtime-xray/issues"
+    "url": "https://github.com/erisk405/R-Angular-Runtime-X-Ray.git/issues"
   },
   "engines": {
     "vscode": "^1.85.0"
