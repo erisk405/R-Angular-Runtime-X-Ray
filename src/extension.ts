@@ -17,6 +17,7 @@ import { ComparisonViewProvider } from "./visualization/comparisonView";
 import { DecorationManager } from "./visualization/decorationManager";
 import { FlameGraphViewProvider } from "./visualization/flameGraphView";
 import { XRayWebSocketServer } from "./websocket/server";
+import { PortManager } from "./websocket/portManager";
 
 // Import the native Rust module
 let nativeModule: NativeModule;
@@ -34,10 +35,11 @@ export function activate(context: vscode.ExtensionContext) {
 
   // Initialize UI components
   const statusBarManager = new StatusBarManager();
-  const probeSetupManager = new ProbeSetupManager(outputChannel);
+  const portManager = new PortManager();
+  const probeSetupManager = new ProbeSetupManager(outputChannel, portManager);
 
   // Initialize existing components
-  const wsServer = new XRayWebSocketServer(outputChannel);
+  const wsServer = new XRayWebSocketServer(outputChannel, portManager);
   const decorationManager = new DecorationManager(outputChannel);
   const codeLensProvider = new PerformanceCodeLensProvider();
   const promptGenerator = new AIPromptGenerator();
@@ -53,6 +55,10 @@ export function activate(context: vscode.ExtensionContext) {
     context.extensionUri,
     nativeModule,
   );
+
+  // Wire up dependencies for flame graph auto-refresh
+  flameGraphProvider.setCallStackBuilder(callStackBuilder);
+  flameGraphProvider.setCaptureManager(captureManager);
   const comparisonProvider = new ComparisonViewProvider(
     context.extensionUri,
     nativeModule,
@@ -63,24 +69,46 @@ export function activate(context: vscode.ExtensionContext) {
   const performanceStore = new Map<string, MethodPerformanceData>();
 
   // Start WebSocket server with status updates
-  wsServer.start();
-
-  // Update status bar when server is ready
-  setTimeout(() => {
-    statusBarManager.updateStatus(ConnectionStatus.Connected, { clientCount: 0, port: 3333 });
-  }, 1000);
+  wsServer
+    .start()
+    .then(() => {
+      const port = portManager.getCurrentPort();
+      // Update status bar when server is ready
+      setTimeout(() => {
+        statusBarManager.updateStatus(ConnectionStatus.Connected, {
+          clientCount: 0,
+          port,
+        });
+      }, 1000);
+    })
+    .catch((error) => {
+      statusBarManager.updateStatus(ConnectionStatus.Error);
+      vscode.window.showErrorMessage(
+        `Failed to start WebSocket server: ${error}`,
+      );
+    });
 
   // Listen for WebSocket events to update status
   wsServer.onClientConnected(() => {
     const clientCount = wsServer.getClientCount();
-    statusBarManager.updateStatus(ConnectionStatus.Connected, { clientCount });
+    const port = portManager.getCurrentPort();
+    statusBarManager.updateStatus(ConnectionStatus.Connected, {
+      clientCount,
+      port,
+    });
     outputChannel.appendLine(`Client connected. Total clients: ${clientCount}`);
   });
 
   wsServer.onClientDisconnected(() => {
     const clientCount = wsServer.getClientCount();
-    statusBarManager.updateStatus(ConnectionStatus.Connected, { clientCount });
-    outputChannel.appendLine(`Client disconnected. Total clients: ${clientCount}`);
+    const port = portManager.getCurrentPort();
+    statusBarManager.updateStatus(ConnectionStatus.Connected, {
+      clientCount,
+      port,
+    });
+    outputChannel.appendLine(
+      `Client disconnected. Total clients: ${clientCount}`,
+    );
   });
 
   wsServer.onError((error) => {
@@ -126,6 +154,15 @@ export function activate(context: vscode.ExtensionContext) {
     "angularXray.analyzeWithAI",
     async (data: MethodPerformanceData) => {
       try {
+        // Early validation check
+        if (!data.filePath || !data.line) {
+          vscode.window.showErrorMessage(
+            `Cannot analyze ${data.className}.${data.methodName}: Location missing. ` +
+              `Try re-running your Angular app to collect fresh data.`,
+          );
+          return;
+        }
+
         const prompt = await promptGenerator.generatePrompt(data);
         await promptGenerator.copyToClipboard(prompt);
 
@@ -134,7 +171,7 @@ export function activate(context: vscode.ExtensionContext) {
         );
       } catch (error) {
         vscode.window.showErrorMessage(
-          `Failed to generate AI prompt: ${error}`,
+          `Failed to generate AI prompt: ${error instanceof Error ? error.message : error}`,
         );
       }
     },
@@ -145,14 +182,14 @@ export function activate(context: vscode.ExtensionContext) {
     "angularXray.setupProbe",
     async () => {
       await probeSetupManager.setupProbe();
-    }
+    },
   );
 
   const showStatusCommand = vscode.commands.registerCommand(
     "angularXray.showStatus",
     async () => {
       await statusBarManager.showStatusDetails();
-    }
+    },
   );
 
   const startCaptureCommand = vscode.commands.registerCommand(
@@ -315,6 +352,58 @@ export function activate(context: vscode.ExtensionContext) {
     decorationManager.onActiveEditorChange();
   });
 
+  // Server control commands
+  const restartServerCommand = vscode.commands.registerCommand(
+    "angularXray.restartServer",
+    async () => {
+      try {
+        wsServer.stop();
+        await new Promise((resolve) => setTimeout(resolve, 1000));
+        await wsServer.start();
+        const port = portManager.getCurrentPort();
+        statusBarManager.updateStatus(ConnectionStatus.Connected, {
+          clientCount: 0,
+          port,
+        });
+        vscode.window.showInformationMessage(
+          `WebSocket server restarted on port ${port}`,
+        );
+      } catch (error) {
+        statusBarManager.updateStatus(ConnectionStatus.Error);
+        vscode.window.showErrorMessage(`Failed to restart server: ${error}`);
+      }
+    },
+  );
+
+  const stopServerCommand = vscode.commands.registerCommand(
+    "angularXray.stopServer",
+    () => {
+      wsServer.stop();
+      statusBarManager.updateStatus(ConnectionStatus.Disconnected);
+      vscode.window.showInformationMessage("WebSocket server stopped");
+    },
+  );
+
+  const startServerCommand = vscode.commands.registerCommand(
+    "angularXray.startServer",
+    async () => {
+      try {
+        await wsServer.start();
+        const port = portManager.getCurrentPort();
+        statusBarManager.updateStatus(ConnectionStatus.Connected, {
+          clientCount: 0,
+          port,
+        });
+        vscode.window.showInformationMessage(
+          `WebSocket server started on port ${port}`,
+        );
+      } catch (error) {
+        statusBarManager.updateStatus(ConnectionStatus.Error);
+        vscode.window.showErrorMessage(`Failed to start server: ${error}`);
+      }
+    },
+  );
+
   // Add disposables
   context.subscriptions.push(
     outputChannel,
@@ -327,6 +416,9 @@ export function activate(context: vscode.ExtensionContext) {
     showFlameGraphCommand,
     compareSnapshotsCommand,
     manageSnapshotsCommand,
+    restartServerCommand,
+    stopServerCommand,
+    startServerCommand,
     { dispose: () => wsServer.stop() },
     { dispose: () => decorationManager.dispose() },
     { dispose: () => codeLensProvider.dispose() },
@@ -383,55 +475,55 @@ export function activate(context: vscode.ExtensionContext) {
             outputChannel.appendLine(`Located file: ${filePath}`);
           } else {
             outputChannel.appendLine(
-              `File not found for class: ${message.class}`,
+              `File not found for class: ${message.class} - will track without location`,
             );
-            return;
           }
         } catch (error) {
-          outputChannel.appendLine(`Error locating file: ${error}`);
-          return;
+          outputChannel.appendLine(
+            `Error locating file: ${error} - will track without location`,
+          );
         }
       }
 
       // Phase 2: Parse the file to find the method line
       let methodLine: number | undefined;
 
-      try {
-        if (!filePath) {
-          outputChannel.appendLine(`File path is undefined`);
-          return;
-        }
-        const fileContent = fs.readFileSync(filePath, "utf-8");
+      if (filePath) {
+        try {
+          const fileContent = fs.readFileSync(filePath, "utf-8");
 
-        // Try original method name first
-        let result = nativeModule.parseMethod(fileContent, message.method);
+          // Try original method name first
+          let result = nativeModule.parseMethod(fileContent, message.method);
 
-        // If not found and method name starts with underscore, try without it
-        if (!result.found && message.method.startsWith("_")) {
-          const methodNameWithoutUnderscore = message.method.substring(1);
-          outputChannel.appendLine(
-            `Retrying method without underscore: ${methodNameWithoutUnderscore}`,
-          );
-          result = nativeModule.parseMethod(
-            fileContent,
-            methodNameWithoutUnderscore,
-          );
-        }
+          // If not found and method name starts with underscore, try without it
+          if (!result.found && message.method.startsWith("_")) {
+            const methodNameWithoutUnderscore = message.method.substring(1);
+            outputChannel.appendLine(
+              `Retrying method without underscore: ${methodNameWithoutUnderscore}`,
+            );
+            result = nativeModule.parseMethod(
+              fileContent,
+              methodNameWithoutUnderscore,
+            );
+          }
 
-        if (result.found) {
-          methodLine = result.line;
-          outputChannel.appendLine(
-            `Found method ${message.method} at line ${methodLine}`,
-          );
-        } else {
-          outputChannel.appendLine(
-            `Method ${message.method} not found in ${filePath}`,
-          );
-          return;
+          if (result.found) {
+            methodLine = result.line;
+            outputChannel.appendLine(
+              `Found method ${message.method} at line ${methodLine}`,
+            );
+          } else {
+            outputChannel.appendLine(
+              `Method ${message.method} not found in ${filePath}`,
+            );
+          }
+        } catch (error) {
+          outputChannel.appendLine(`Error parsing method: ${error}`);
         }
-      } catch (error) {
-        outputChannel.appendLine(`Error parsing method: ${error}`);
-        return;
+      } else {
+        outputChannel.appendLine(
+          `Warning: No file path for ${message.class}.${message.method}`,
+        );
       }
 
       // Update performance store
@@ -450,17 +542,31 @@ export function activate(context: vscode.ExtensionContext) {
           changeDetectionCount: message.changeDetectionCount,
         };
         performanceStore.set(key, perfData);
+      } else {
+        // **KEY FIX**: Preserve filePath/line once set - never overwrite with undefined
+        if (filePath && methodLine) {
+          perfData.filePath = filePath;
+          perfData.line = methodLine;
+        }
+
+        // Update execution data
+        perfData.executions.push(message.duration);
+        perfData.lastDuration = message.duration;
+        perfData.averageDuration =
+          perfData.executions.reduce((a, b) => a + b, 0) /
+          perfData.executions.length;
+
+        if (message.changeDetectionCount !== undefined) {
+          perfData.changeDetectionCount = message.changeDetectionCount;
+        }
       }
 
-      // Update execution data
-      perfData.executions.push(message.duration);
-      perfData.lastDuration = message.duration;
-      perfData.averageDuration =
-        perfData.executions.reduce((a, b) => a + b, 0) /
-        perfData.executions.length;
-
-      if (message.changeDetectionCount !== undefined) {
-        perfData.changeDetectionCount = message.changeDetectionCount;
+      // **Validate before updating UI** - prevent errors in CodeLens and AI analysis
+      if (!perfData.filePath || !perfData.line) {
+        outputChannel.appendLine(
+          `Warning: ${message.class}.${message.method} has no location. Skipping UI update.`,
+        );
+        return;
       }
 
       // Update visualizations

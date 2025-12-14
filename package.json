@@ -81,6 +81,18 @@
       {
         "command": "angularXray.showStatus",
         "title": "Angular X-Ray: Show Status"
+      },
+      {
+        "command": "angularXray.restartServer",
+        "title": "Angular X-Ray: Restart WebSocket Server"
+      },
+      {
+        "command": "angularXray.stopServer",
+        "title": "Angular X-Ray: Stop WebSocket Server"
+      },
+      {
+        "command": "angularXray.startServer",
+        "title": "Angular X-Ray: Start WebSocket Server"
       }
     ],
     "viewsContainers": {
@@ -107,6 +119,41 @@
           "icon": "$(compare-changes)"
         }
       ]
+    },
+    "configuration": {
+      "title": "Angular X-Ray",
+      "properties": {
+        "angularXray.websocket.port": {
+          "type": "number",
+          "default": 3333,
+          "minimum": 1024,
+          "maximum": 65535,
+          "description": "WebSocket server port for Angular X-Ray performance monitoring"
+        },
+        "angularXray.websocket.autoFindPort": {
+          "type": "boolean",
+          "default": true,
+          "description": "Automatically find an available port if the configured port is in use"
+        },
+        "angularXray.performance.threshold": {
+          "type": "number",
+          "default": 50,
+          "minimum": 0,
+          "description": "Performance threshold in milliseconds for CodeLens warnings"
+        },
+        "angularXray.flameGraph.autoRefresh": {
+          "type": "boolean",
+          "default": true,
+          "description": "Automatically refresh flame graph when capture is active"
+        },
+        "angularXray.flameGraph.refreshInterval": {
+          "type": "number",
+          "default": 2000,
+          "minimum": 500,
+          "maximum": 10000,
+          "description": "Flame graph auto-refresh interval in milliseconds"
+        }
+      }
     }
   },
   "scripts": {
