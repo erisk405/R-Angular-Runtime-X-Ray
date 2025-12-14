@@ -1,6 +1,7 @@
 .vscode/**
 .vscode-test/**
 src/**
+nul
 native/src/**
 native/target/**
 native/Cargo.toml
@@ -14,7 +15,6 @@ vsc-extension-quickstart.md
 **/*.map
 **/*.ts
 !out/**/*.js
-node_modules/**
 *.vsix
 BUILD_GUIDE.md
 .git/**

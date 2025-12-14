@@ -2,7 +2,7 @@
   "name": "angular-runtime-xray",
   "displayName": "Angular Runtime X-Ray",
   "description": "Real-time performance monitoring and visualization for Angular applications with AI-powered optimization suggestions",
-  "version": "0.1.0",
+  "version": "0.2.3",
   "publisher": "angular-xray",
   "author": {
     "name": "Angular X-Ray Team",
@@ -45,7 +45,7 @@
     "theme": "dark"
   },
   "activationEvents": [
-    "onLanguage:typescript"
+    "onStartupFinished"
   ],
   "main": "./out/extension.js",
   "contributes": {
