@@ -152,16 +152,136 @@ export function activate(context: vscode.ExtensionContext) {
   // Register AI analysis command
   const analyzeCommand = vscode.commands.registerCommand(
     "angularXray.analyzeWithAI",
-    async (data: MethodPerformanceData) => {
+    async (encodedData?: string) => {
       try {
-        // Early validation check
-        if (!data.filePath || !data.line) {
+        let className: string | undefined;
+        let methodName: string | undefined;
+
+        // Try to decode data from argument
+        if (encodedData && typeof encodedData === "string") {
+          try {
+            const decoded = JSON.parse(
+              Buffer.from(encodedData, "base64").toString("utf-8"),
+            );
+            className = decoded.className;
+            methodName = decoded.methodName;
+            outputChannel.appendLine(
+              `[AI Analysis] Decoded from argument: ${className}.${methodName}`,
+            );
+          } catch (e) {
+            outputChannel.appendLine(
+              `[AI Analysis] Failed to decode argument: ${e}`,
+            );
+            encodedData = undefined;
+          }
+        }
+
+        // Fallback: Find data from current file and show quick pick
+        if (!encodedData) {
+          outputChannel.appendLine(
+            `[AI Analysis] No argument received, searching from active editor`,
+          );
+
+          const editor = vscode.window.activeTextEditor;
+          if (!editor) {
+            vscode.window.showErrorMessage("No active editor found");
+            return;
+          }
+
+          const filePath = editor.document.uri.fsPath;
+          const availableData: MethodPerformanceData[] = [];
+
+          // Find all performance data for current file
+          for (const [key, data] of performanceStore) {
+            if (data.filePath === filePath && data.line) {
+              availableData.push(data);
+            }
+          }
+
+          if (availableData.length === 0) {
+            vscode.window.showErrorMessage(
+              `No performance data found for ${filePath}`,
+            );
+            return;
+          }
+
+          // Show quick pick if multiple methods
+          if (availableData.length === 1) {
+            className = availableData[0].className;
+            methodName = availableData[0].methodName;
+          } else {
+            const items = availableData.map((d) => ({
+              label: `${d.className}.${d.methodName}`,
+              description: `Line ${d.line}: ${d.averageDuration.toFixed(2)}ms avg`,
+              data: d,
+            }));
+
+            const selected = await vscode.window.showQuickPick(items, {
+              placeHolder: "Select method to analyze",
+            });
+
+            if (!selected) {
+              return;
+            }
+
+            className = selected.data.className;
+            methodName = selected.data.methodName;
+          }
+
+          outputChannel.appendLine(
+            `[AI Analysis] Selected from file: ${className}.${methodName}`,
+          );
+        }
+
+        // Validate we have className and methodName
+        if (!className || !methodName) {
+          outputChannel.appendLine(
+            `[AI Analysis] Missing className or methodName`,
+          );
           vscode.window.showErrorMessage(
-            `Cannot analyze ${data.className}.${data.methodName}: Location missing. ` +
+            "Cannot analyze: Missing method information",
+          );
+          return;
+        }
+
+        // Debug logging
+        outputChannel.appendLine(
+          `[AI Analysis] Analyzing: ${className}.${methodName}`,
+        );
+        outputChannel.appendLine(
+          `[AI Analysis] PerformanceStore keys: ${Array.from(performanceStore.keys()).join(", ")}`,
+        );
+
+        // Find data in performanceStore using className.methodName as key
+        const key = `${className}.${methodName}`;
+        const data = performanceStore.get(key);
+
+        if (!data) {
+          outputChannel.appendLine(
+            `[AI Analysis] No data found for key: ${key}`,
+          );
+          vscode.window.showErrorMessage(
+            `Cannot analyze ${className}.${methodName}: No performance data found. ` +
+              `Make sure the method has been executed at least once.`,
+          );
+          return;
+        }
+
+        // Validate that we have location information
+        if (!data.filePath || !data.line) {
+          outputChannel.appendLine(
+            `[AI Analysis] Data found but missing location: filePath=${data.filePath}, line=${data.line}`,
+          );
+          vscode.window.showErrorMessage(
+            `Cannot analyze ${className}.${methodName}: Location information missing. ` +
               `Try re-running your Angular app to collect fresh data.`,
           );
           return;
         }
+
+        outputChannel.appendLine(
+          `[AI Analysis] Found data: ${data.filePath}:${data.line}`,
+        );
 
         const prompt = await promptGenerator.generatePrompt(data);
         await promptGenerator.copyToClipboard(prompt);
@@ -170,6 +290,9 @@ export function activate(context: vscode.ExtensionContext) {
           `AI analysis prompt for ${data.className}.${data.methodName} copied to clipboard!`,
         );
       } catch (error) {
+        outputChannel.appendLine(
+          `[AI Analysis] Error: ${error instanceof Error ? error.stack : error}`,
+        );
         vscode.window.showErrorMessage(
           `Failed to generate AI prompt: ${error instanceof Error ? error.message : error}`,
         );
