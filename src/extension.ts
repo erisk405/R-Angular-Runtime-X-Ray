@@ -56,9 +56,8 @@ export function activate(context: vscode.ExtensionContext) {
     nativeModule,
   );
 
-  // Wire up dependencies for flame graph auto-refresh
+  // Wire up dependencies for flame graph
   flameGraphProvider.setCallStackBuilder(callStackBuilder);
-  flameGraphProvider.setCaptureManager(captureManager);
   const comparisonProvider = new ComparisonViewProvider(
     context.extensionUri,
     nativeModule,

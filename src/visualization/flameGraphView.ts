@@ -1,7 +1,6 @@
 import * as vscode from "vscode";
 import { CallStackNode, FlameGraphData, NativeModule } from "../types";
 import { CallStackBuilder } from "./callStackBuilder";
-import { SnapshotCaptureManager } from "../storage/captureManager";
 
 /**
  * Flame graph webview provider
@@ -9,31 +8,15 @@ import { SnapshotCaptureManager } from "../storage/captureManager";
 export class FlameGraphViewProvider implements vscode.WebviewViewProvider {
   public static readonly viewType = "angularXray.flameGraph";
   private _view?: vscode.WebviewView;
-  private autoRefreshTimer?: NodeJS.Timeout;
-  private isAutoRefreshEnabled: boolean = true;
-  private refreshInterval: number = 2000;
   private callStackBuilder?: CallStackBuilder;
-  private captureManager?: SnapshotCaptureManager;
 
   constructor(
     private readonly _extensionUri: vscode.Uri,
     private nativeModule: NativeModule,
-  ) {
-    this.loadSettings();
-  }
-
-  private loadSettings(): void {
-    const config = vscode.workspace.getConfiguration("angularXray");
-    this.isAutoRefreshEnabled = config.get("flameGraph.autoRefresh", true);
-    this.refreshInterval = config.get("flameGraph.refreshInterval", 2000);
-  }
+  ) {}
 
   public setCallStackBuilder(builder: CallStackBuilder): void {
     this.callStackBuilder = builder;
-  }
-
-  public setCaptureManager(manager: SnapshotCaptureManager): void {
-    this.captureManager = manager;
   }
 
   public resolveWebviewView(
@@ -59,27 +42,7 @@ export class FlameGraphViewProvider implements vscode.WebviewViewProvider {
         case "refresh":
           this.manualRefresh();
           break;
-        case "toggleAutoRefresh":
-          this.toggleAutoRefresh(message.enabled);
-          break;
-        case "ready":
-          this.startAutoRefreshIfNeeded();
-          break;
       }
-    });
-
-    // Handle visibility changes
-    webviewView.onDidChangeVisibility(() => {
-      if (webviewView.visible) {
-        this.startAutoRefreshIfNeeded();
-      } else {
-        this.stopAutoRefresh();
-      }
-    });
-
-    // Handle disposal
-    webviewView.onDidDispose(() => {
-      this.stopAutoRefresh();
     });
   }
 
@@ -114,75 +77,6 @@ export class FlameGraphViewProvider implements vscode.WebviewViewProvider {
   }
 
   /**
-   * Start auto-refresh if enabled
-   */
-  private startAutoRefreshIfNeeded(): void {
-    if (!this.isAutoRefreshEnabled || !this._view) {
-      return;
-    }
-
-    this.stopAutoRefresh();
-    this.autoRefreshTimer = setInterval(() => {
-      this.autoRefresh();
-    }, this.refreshInterval);
-  }
-
-  /**
-   * Stop auto-refresh timer
-   */
-  private stopAutoRefresh(): void {
-    if (this.autoRefreshTimer) {
-      clearInterval(this.autoRefreshTimer);
-      this.autoRefreshTimer = undefined;
-    }
-  }
-
-  /**
-   * Toggle auto-refresh on/off
-   */
-  private toggleAutoRefresh(enabled: boolean): void {
-    this.isAutoRefreshEnabled = enabled;
-
-    if (enabled) {
-      this.startAutoRefreshIfNeeded();
-    } else {
-      this.stopAutoRefresh();
-    }
-
-    // Save setting
-    vscode.workspace
-      .getConfiguration("angularXray")
-      .update(
-        "flameGraph.autoRefresh",
-        enabled,
-        vscode.ConfigurationTarget.Workspace,
-      );
-  }
-
-  /**
-   * Auto-refresh flame graph data
-   */
-  private async autoRefresh(): Promise<void> {
-    if (!this._view || !this.callStackBuilder) {
-      return;
-    }
-
-    // Only refresh if capture is active
-    if (this.captureManager && !this.captureManager.isCaptureActive()) {
-      return;
-    }
-
-    try {
-      const callStacks = this.callStackBuilder.buildCallTree();
-      if (callStacks.length > 0) {
-        await this.updateFlameGraphInternal(callStacks, false);
-      }
-    } catch (error) {
-      console.error("[FlameGraph] Auto-refresh error:", error);
-    }
-  }
-
-  /**
    * Manual refresh triggered by user
    */
   private async manualRefresh(): Promise<void> {
@@ -191,7 +85,7 @@ export class FlameGraphViewProvider implements vscode.WebviewViewProvider {
     }
 
     try {
-      this._view.webview.postMessage({ type: "updating", manual: true });
+      this._view.webview.postMessage({ type: "updating" });
 
       const callStacks = this.callStackBuilder.buildCallTree();
 
@@ -201,27 +95,6 @@ export class FlameGraphViewProvider implements vscode.WebviewViewProvider {
         return;
       }
 
-      await this.updateFlameGraphInternal(callStacks, true);
-      vscode.window.showInformationMessage(
-        `Flame graph updated with ${this.callStackBuilder.getCallCount()} calls.`,
-      );
-    } catch (error) {
-      vscode.window.showErrorMessage(`Failed to refresh: ${error}`);
-    }
-  }
-
-  /**
-   * Internal method to update flame graph
-   */
-  private async updateFlameGraphInternal(
-    callStacks: CallStackNode[],
-    isManualUpdate: boolean,
-  ): Promise<void> {
-    if (!this._view) {
-      return;
-    }
-
-    try {
       const callStackJson = JSON.stringify(callStacks);
       const flameGraphJson =
         this.nativeModule.buildFlameGraphData(callStackJson);
@@ -230,14 +103,13 @@ export class FlameGraphViewProvider implements vscode.WebviewViewProvider {
       this._view.webview.postMessage({
         type: "updateFlameGraph",
         data: flameGraphData,
-        isManualUpdate,
       });
+
+      vscode.window.showInformationMessage(
+        `Flame graph updated with ${this.callStackBuilder.getCallCount()} calls.`,
+      );
     } catch (error) {
-      if (isManualUpdate) {
-        vscode.window.showErrorMessage(
-          `Failed to generate flame graph: ${error}`,
-        );
-      }
+      vscode.window.showErrorMessage(`Failed to refresh: ${error}`);
     }
   }
 
@@ -323,19 +195,22 @@ export class FlameGraphViewProvider implements vscode.WebviewViewProvider {
           color: var(--vscode-descriptionForeground);
         }
         button {
-          background: var(--vscode-button-background);
-          color: var(--vscode-button-foreground);
-          border: none;
-          padding: 4px 8px;
+          background: rgba(255, 255, 255, 0.05);
+          color: var(--vscode-foreground);
+          border: 1px solid rgba(255, 255, 255, 0.1);
+          padding: 6px 12px;
           cursor: pointer;
-          border-radius: 2px;
+          border-radius: 6px;
           margin-right: 8px;
+          font-size: 13px;
+          transition: all 0.2s;
         }
         button:hover {
-          background: var(--vscode-button-hoverBackground);
+          background: rgba(255, 255, 255, 0.1);
+          border-color: rgba(255, 255, 255, 0.2);
         }
-        button.active {
-          background: var(--vscode-button-secondaryBackground);
+        button:active {
+          transform: scale(0.98);
         }
         .spinner {
           display: inline-block;
@@ -346,19 +221,20 @@ export class FlameGraphViewProvider implements vscode.WebviewViewProvider {
           to { transform: rotate(360deg); }
         }
         #update-indicator {
-          margin-left: 8px;
+          margin-left: 12px;
+          color: var(--vscode-descriptionForeground);
+          font-size: 13px;
+        }
+        #stats {
+          margin-left: 12px;
+          font-size: 13px;
           color: var(--vscode-descriptionForeground);
         }
       </style>
     </head>
     <body>
       <div id="controls">
-        <button onclick="refreshGraph()">🔄 Refresh</button>
-        <button onclick="toggleAutoRefresh()" id="auto-refresh-btn" class="active">
-          <span id="auto-refresh-icon">▶️</span>
-          <span id="auto-refresh-text">Auto-Refresh: ON</span>
-        </button>
-        <button onclick="resetZoom()">🔍 Reset Zoom</button>
+        <button onclick="refreshGraph()">Refresh</button>
         <span id="stats"></span>
         <span id="update-indicator" style="display: none;">
           <span class="spinner">⟳</span> Updating...
@@ -375,12 +251,6 @@ export class FlameGraphViewProvider implements vscode.WebviewViewProvider {
       <script>
         const vscode = acquireVsCodeApi();
         let flameData = null;
-        let currentZoom = null;
-        let autoRefreshEnabled = true;
-
-        window.addEventListener('load', () => {
-          vscode.postMessage({ type: 'ready' });
-        });
 
         window.addEventListener('message', event => {
           const message = event.data;
@@ -420,25 +290,47 @@ export class FlameGraphViewProvider implements vscode.WebviewViewProvider {
           const stats = document.getElementById('stats');
           stats.textContent = \`Total: \${data.totalDuration.toFixed(2)}ms | Nodes: \${countNodes(data.nodes)}\`;
 
-          const width = container.node().clientWidth;
-          const cellHeight = 18;
-          const totalHeight = calculateHeight(data.nodes) * cellHeight;
+          const containerWidth = container.node().clientWidth;
+          const containerHeight = container.node().clientHeight;
+          const cellHeight = 24; // เพิ่มจาก 18 เป็น 24
+          const numLevels = calculateHeight(data.nodes);
+          const totalHeight = Math.max(numLevels * cellHeight, containerHeight);
 
           const svg = container.append('svg')
-            .attr('width', width)
-            .attr('height', totalHeight);
+            .attr('width', containerWidth)
+            .attr('height', containerHeight)
+            .style('cursor', 'grab');
+
+          // Create a group for zooming
+          const g = svg.append('g');
+
+          // Add zoom behavior
+          const zoom = d3.zoom()
+            .scaleExtent([0.5, 10])
+            .translateExtent([[-containerWidth, -containerHeight], [containerWidth * 3, totalHeight * 2]])
+            .on('zoom', (event) => {
+              g.attr('transform', event.transform);
+            })
+            .on('start', () => {
+              svg.style('cursor', 'grabbing');
+            })
+            .on('end', () => {
+              svg.style('cursor', 'grab');
+            });
+
+          svg.call(zoom);
 
           const xScale = d3.scaleLinear()
             .domain([0, data.totalDuration])
-            .range([0, width]);
+            .range([0, containerWidth]);
 
           const colorScale = d3.scaleSequential(d3.interpolateWarm)
             .domain([0, 15]);
 
-          renderNodes(svg, data.nodes, 0, 0, width, xScale, colorScale);
+          renderNodes(g, data.nodes, 0, 0, containerWidth, xScale, colorScale, cellHeight);
         }
 
-        function renderNodes(svg, nodes, x, y, width, xScale, colorScale) {
+        function renderNodes(svg, nodes, x, y, width, xScale, colorScale, cellHeight = 24) {
           nodes.forEach(node => {
             const nodeWidth = xScale(node.value);
             const nodeX = x;
@@ -449,7 +341,7 @@ export class FlameGraphViewProvider implements vscode.WebviewViewProvider {
               .attr('x', nodeX)
               .attr('y', y)
               .attr('width', nodeWidth)
-              .attr('height', 18)
+              .attr('height', cellHeight)
               .attr('fill', colorScale(node.depth))
               .on('click', () => {
                 if (node.filePath && node.line) {
@@ -468,7 +360,7 @@ export class FlameGraphViewProvider implements vscode.WebviewViewProvider {
               svg.append('text')
                 .attr('class', 'flame-text')
                 .attr('x', nodeX + 4)
-                .attr('y', y + 13)
+                .attr('y', y + (cellHeight / 2) + 5)
                 .text(truncateText(node.name, nodeWidth - 8));
             }
 
@@ -477,7 +369,7 @@ export class FlameGraphViewProvider implements vscode.WebviewViewProvider {
               let childX = nodeX;
               node.children.forEach(child => {
                 const childWidth = xScale(child.value);
-                renderNodes(svg, [child], childX, y + 18, childWidth, xScale, colorScale);
+                renderNodes(svg, [child], childX, y + cellHeight, childWidth, xScale, colorScale, cellHeight);
                 childX += childWidth;
               });
             }
@@ -533,38 +425,9 @@ export class FlameGraphViewProvider implements vscode.WebviewViewProvider {
           return count;
         }
 
-        function resetZoom() {
-          if (flameData) {
-            renderFlameGraph(flameData);
-          }
-        }
-
         function refreshGraph() {
           document.getElementById('update-indicator').style.display = 'inline-block';
           vscode.postMessage({ type: 'refresh' });
-        }
-
-        function toggleAutoRefresh() {
-          autoRefreshEnabled = !autoRefreshEnabled;
-
-          const btn = document.getElementById('auto-refresh-btn');
-          const icon = document.getElementById('auto-refresh-icon');
-          const text = document.getElementById('auto-refresh-text');
-
-          if (autoRefreshEnabled) {
-            btn.classList.add('active');
-            icon.textContent = '▶️';
-            text.textContent = 'Auto-Refresh: ON';
-          } else {
-            btn.classList.remove('active');
-            icon.textContent = '⏸️';
-            text.textContent = 'Auto-Refresh: OFF';
-          }
-
-          vscode.postMessage({
-            type: 'toggleAutoRefresh',
-            enabled: autoRefreshEnabled
-          });
         }
 
         function showEmptyState() {
@@ -580,7 +443,7 @@ export class FlameGraphViewProvider implements vscode.WebviewViewProvider {
                 <li>Add <code>@TrackPerformance()</code> decorators to your methods</li>
                 <li>Start your app with <code>ng serve</code></li>
                 <li>Interact with your app</li>
-                <li>Click Refresh or wait for auto-refresh</li>
+                <li>Click Refresh to view flame graph</li>
               </ol>
             \`);
         }
