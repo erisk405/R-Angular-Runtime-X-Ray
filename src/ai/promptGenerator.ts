@@ -1,11 +1,19 @@
-import * as vscode from 'vscode';
-import { MethodPerformanceData } from '../types';
+import * as vscode from "vscode";
+import { MethodPerformanceData } from "../types";
 
 export class AIPromptGenerator {
   /**
    * Generate an AI analysis prompt for a method's performance
    */
   public async generatePrompt(data: MethodPerformanceData): Promise<string> {
+    // Defensive check: ensure location data is available
+    if (!data.filePath || !data.line) {
+      throw new Error(
+        `Cannot generate AI analysis: Missing location for ${data.className}.${data.methodName}. ` +
+          `Try re-running your Angular app to collect fresh data.`,
+      );
+    }
+
     const codeSnippet = await this.extractCodeSnippet(data);
 
     const prompt = this.formatPrompt({
@@ -16,7 +24,7 @@ export class AIPromptGenerator {
       minDuration: Math.min(...data.executions),
       maxDuration: Math.max(...data.executions),
       changeDetectionCount: data.changeDetectionCount,
-      codeSnippet
+      codeSnippet,
     });
 
     return prompt;
@@ -25,9 +33,11 @@ export class AIPromptGenerator {
   /**
    * Extract the code snippet for the method
    */
-  private async extractCodeSnippet(data: MethodPerformanceData): Promise<string> {
+  private async extractCodeSnippet(
+    data: MethodPerformanceData,
+  ): Promise<string> {
     if (!data.filePath || !data.line) {
-      return '// Code snippet not available';
+      return "// Code snippet not available";
     }
 
     try {
@@ -35,11 +45,11 @@ export class AIPromptGenerator {
       const startLine = Math.max(0, data.line - 3); // 3 lines before
       const endLine = Math.min(document.lineCount - 1, data.line + 15); // 15 lines after
 
-      let snippet = '';
+      let snippet = "";
       for (let i = startLine; i <= endLine; i++) {
         const lineText = document.lineAt(i).text;
-        const lineNumber = (i + 1).toString().padStart(4, ' ');
-        const marker = i === data.line - 1 ? '→' : ' ';
+        const lineNumber = (i + 1).toString().padStart(4, " ");
+        const marker = i === data.line - 1 ? "→" : " ";
         snippet += `${lineNumber} ${marker} ${lineText}\n`;
       }
 
@@ -70,7 +80,7 @@ export class AIPromptGenerator {
       minDuration,
       maxDuration,
       changeDetectionCount,
-      codeSnippet
+      codeSnippet,
     } = params;
 
     return `# Angular Performance Analysis Request
@@ -86,7 +96,7 @@ export class AIPromptGenerator {
 - **Min/Max Duration:** ${minDuration.toFixed(2)}ms / ${maxDuration.toFixed(2)}ms${
       changeDetectionCount !== undefined
         ? `\n- **Change Detection Cycles:** ${changeDetectionCount}`
-        : ''
+        : ""
     }
 
 ## Code Snippet

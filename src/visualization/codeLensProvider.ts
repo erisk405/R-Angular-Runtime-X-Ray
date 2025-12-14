@@ -1,5 +1,5 @@
-import * as vscode from 'vscode';
-import { MethodPerformanceData } from '../types';
+import * as vscode from "vscode";
+import { MethodPerformanceData } from "../types";
 
 export class PerformanceCodeLensProvider implements vscode.CodeLensProvider {
   private performanceData: Map<string, MethodPerformanceData> = new Map();
@@ -26,22 +26,30 @@ export class PerformanceCodeLensProvider implements vscode.CodeLensProvider {
    */
   public provideCodeLenses(
     document: vscode.TextDocument,
-    token: vscode.CancellationToken
+    token: vscode.CancellationToken,
   ): vscode.CodeLens[] | Thenable<vscode.CodeLens[]> {
     const codeLenses: vscode.CodeLens[] = [];
 
     // Find all performance data for this file
     for (const [key, data] of this.performanceData) {
+      // Stricter validation: ensure all required fields are present and valid
+      if (
+        !data.filePath ||
+        typeof data.filePath !== "string" ||
+        !data.line ||
+        typeof data.line !== "number" ||
+        data.line < 1
+      ) {
+        continue;
+      }
+
+      // Verify file path matches document
       if (data.filePath !== document.uri.fsPath) {
         continue;
       }
 
       // Only show CodeLens for slow methods (>50ms)
       if (data.averageDuration <= 50) {
-        continue;
-      }
-
-      if (!data.line || data.line < 1) {
         continue;
       }
 
@@ -54,11 +62,23 @@ export class PerformanceCodeLensProvider implements vscode.CodeLensProvider {
 
       const range = new vscode.Range(line, 0, line, 0);
 
-      const codeLens = new vscode.CodeLens(range, {
-        title: `⚠ Performance: ${data.averageDuration.toFixed(2)}ms avg - Analyze with AI`,
-        command: 'angularXray.analyzeWithAI',
-        arguments: [data]
+      // Encode data as base64 to pass (workaround for VS Code CodeLens arguments bug)
+      const dataToEncode = JSON.stringify({
+        className: data.className,
+        methodName: data.methodName,
       });
+      const encodedData = Buffer.from(dataToEncode).toString("base64");
+
+      const codeLens = new vscode.CodeLens(range, {
+        title: `⚠ ${data.averageDuration.toFixed(2)}ms avg - Analyze with AI`,
+        command: "angularXray.analyzeWithAI",
+        arguments: [encodedData],
+      });
+
+      console.log(
+        `[CodeLens] Created for ${data.className}.${data.methodName} with encoded:`,
+        encodedData,
+      );
 
       codeLenses.push(codeLens);
     }

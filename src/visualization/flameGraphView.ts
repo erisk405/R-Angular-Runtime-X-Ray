@@ -1,22 +1,28 @@
-import * as vscode from 'vscode';
-import { CallStackNode, FlameGraphData, NativeModule } from '../types';
+import * as vscode from "vscode";
+import { CallStackNode, FlameGraphData, NativeModule } from "../types";
+import { CallStackBuilder } from "./callStackBuilder";
 
 /**
  * Flame graph webview provider
  */
 export class FlameGraphViewProvider implements vscode.WebviewViewProvider {
-  public static readonly viewType = 'angularXray.flameGraph';
+  public static readonly viewType = "angularXray.flameGraph";
   private _view?: vscode.WebviewView;
+  private callStackBuilder?: CallStackBuilder;
 
   constructor(
     private readonly _extensionUri: vscode.Uri,
-    private nativeModule: NativeModule
+    private nativeModule: NativeModule,
   ) {}
+
+  public setCallStackBuilder(builder: CallStackBuilder): void {
+    this.callStackBuilder = builder;
+  }
 
   public resolveWebviewView(
     webviewView: vscode.WebviewView,
     context: vscode.WebviewViewResolveContext,
-    _token: vscode.CancellationToken
+    _token: vscode.CancellationToken,
   ): void {
     this._view = webviewView;
 
@@ -30,8 +36,14 @@ export class FlameGraphViewProvider implements vscode.WebviewViewProvider {
     // Handle messages from webview
     webviewView.webview.onDidReceiveMessage((message) => {
       switch (message.type) {
-        case 'navigateToSource':
+        case "navigateToSource":
           this.navigateToSource(message.filePath, message.line);
+          break;
+        case "refresh":
+          this.manualRefresh();
+          break;
+        case "clear":
+          this.clearData();
           break;
       }
     });
@@ -43,7 +55,7 @@ export class FlameGraphViewProvider implements vscode.WebviewViewProvider {
   public async updateFlameGraph(callStacks: CallStackNode[]): Promise<void> {
     if (!this._view) {
       vscode.window.showWarningMessage(
-        'Flame graph view not visible. Please open the Angular X-Ray panel.'
+        "Flame graph view not visible. Please open the Angular X-Ray panel.",
       );
       return;
     }
@@ -51,18 +63,68 @@ export class FlameGraphViewProvider implements vscode.WebviewViewProvider {
     try {
       // Use Rust module to generate flame graph
       const callStackJson = JSON.stringify(callStacks);
-      const flameGraphJson = this.nativeModule.buildFlameGraphData(callStackJson);
+      const flameGraphJson =
+        this.nativeModule.buildFlameGraphData(callStackJson);
       const flameGraphData: FlameGraphData = JSON.parse(flameGraphJson);
 
       // Send to webview
       this._view.webview.postMessage({
-        type: 'updateFlameGraph',
+        type: "updateFlameGraph",
         data: flameGraphData,
       });
     } catch (error) {
       vscode.window.showErrorMessage(
-        `Failed to generate flame graph: ${error}`
+        `Failed to generate flame graph: ${error}`,
       );
+    }
+  }
+
+  /**
+   * Clear all flame graph data
+   */
+  private clearData(): void {
+    if (!this.callStackBuilder) {
+      return;
+    }
+
+    this.callStackBuilder.clear();
+    vscode.window.showInformationMessage("Flame graph data cleared");
+  }
+
+  /**
+   * Manual refresh triggered by user
+   */
+  private async manualRefresh(): Promise<void> {
+    if (!this._view || !this.callStackBuilder) {
+      return;
+    }
+
+    try {
+      this._view.webview.postMessage({ type: "updating" });
+
+      const callStacks = this.callStackBuilder.buildCallTree();
+
+      if (callStacks.length === 0) {
+        vscode.window.showInformationMessage("No performance data available.");
+        this._view.webview.postMessage({ type: "noData" });
+        return;
+      }
+
+      const callStackJson = JSON.stringify(callStacks);
+      const flameGraphJson =
+        this.nativeModule.buildFlameGraphData(callStackJson);
+      const flameGraphData: FlameGraphData = JSON.parse(flameGraphJson);
+
+      this._view.webview.postMessage({
+        type: "updateFlameGraph",
+        data: flameGraphData,
+      });
+
+      vscode.window.showInformationMessage(
+        `Flame graph updated with ${this.callStackBuilder.getCallCount()} calls.`,
+      );
+    } catch (error) {
+      vscode.window.showErrorMessage(`Failed to refresh: ${error}`);
     }
   }
 
@@ -71,7 +133,7 @@ export class FlameGraphViewProvider implements vscode.WebviewViewProvider {
    */
   private async navigateToSource(
     filePath: string,
-    line: number
+    line: number,
   ): Promise<void> {
     try {
       const uri = vscode.Uri.file(filePath);
@@ -148,23 +210,52 @@ export class FlameGraphViewProvider implements vscode.WebviewViewProvider {
           color: var(--vscode-descriptionForeground);
         }
         button {
-          background: var(--vscode-button-background);
-          color: var(--vscode-button-foreground);
-          border: none;
-          padding: 4px 8px;
+          background: rgba(255, 255, 255, 0.05);
+          color: var(--vscode-foreground);
+          border: 1px solid rgba(255, 255, 255, 0.1);
+          padding: 6px 12px;
           cursor: pointer;
-          border-radius: 2px;
+          border-radius: 6px;
           margin-right: 8px;
+          font-size: 13px;
+          transition: all 0.2s;
         }
         button:hover {
-          background: var(--vscode-button-hoverBackground);
+          background: rgba(255, 255, 255, 0.1);
+          border-color: rgba(255, 255, 255, 0.2);
+        }
+        button:active {
+          transform: scale(0.98);
+        }
+        .spinner {
+          display: inline-block;
+          animation: spin 1s linear infinite;
+        }
+        @keyframes spin {
+          from { transform: rotate(0deg); }
+          to { transform: rotate(360deg); }
+        }
+        #update-indicator {
+          margin-left: 12px;
+          color: var(--vscode-descriptionForeground);
+          font-size: 13px;
+        }
+        #stats {
+          margin-left: 12px;
+          font-size: 13px;
+          color: var(--vscode-descriptionForeground);
         }
       </style>
     </head>
     <body>
       <div id="controls">
+        <button onclick="refreshGraph()">Refresh</button>
         <button onclick="resetZoom()">Reset Zoom</button>
+        <button onclick="clearGraph()">Clear</button>
         <span id="stats"></span>
+        <span id="update-indicator" style="display: none;">
+          <span class="spinner">⟳</span> Updating...
+        </span>
       </div>
       <div id="flame-graph">
         <div class="empty-state">
@@ -178,12 +269,28 @@ export class FlameGraphViewProvider implements vscode.WebviewViewProvider {
         const vscode = acquireVsCodeApi();
         let flameData = null;
         let currentZoom = null;
+        let currentSvg = null;
 
         window.addEventListener('message', event => {
           const message = event.data;
-          if (message.type === 'updateFlameGraph') {
-            flameData = message.data;
-            renderFlameGraph(flameData);
+
+          switch (message.type) {
+            case 'updateFlameGraph':
+              document.getElementById('update-indicator').style.display = 'none';
+              flameData = message.data;
+              renderFlameGraph(flameData);
+              break;
+
+            case 'updating':
+              if (message.manual) {
+                document.getElementById('update-indicator').style.display = 'inline-block';
+              }
+              break;
+
+            case 'noData':
+              document.getElementById('update-indicator').style.display = 'none';
+              showEmptyState();
+              break;
           }
         });
 
@@ -202,69 +309,100 @@ export class FlameGraphViewProvider implements vscode.WebviewViewProvider {
           const stats = document.getElementById('stats');
           stats.textContent = \`Total: \${data.totalDuration.toFixed(2)}ms | Nodes: \${countNodes(data.nodes)}\`;
 
-          const width = container.node().clientWidth;
-          const cellHeight = 18;
-          const totalHeight = calculateHeight(data.nodes) * cellHeight;
+          const containerWidth = container.node().clientWidth;
+          const containerHeight = container.node().clientHeight;
+          const cellHeight = 24; // เพิ่มจาก 18 เป็น 24
+          const numLevels = calculateHeight(data.nodes);
+          const totalHeight = Math.max(numLevels * cellHeight, containerHeight);
 
           const svg = container.append('svg')
-            .attr('width', width)
-            .attr('height', totalHeight);
+            .attr('width', containerWidth)
+            .attr('height', containerHeight)
+            .style('cursor', 'grab');
+
+          // Create a group for zooming
+          const g = svg.append('g');
+
+          // Add zoom behavior
+          const zoom = d3.zoom()
+            .scaleExtent([0.5, 10])
+            .translateExtent([[-containerWidth, -containerHeight], [containerWidth * 3, totalHeight * 2]])
+            .on('zoom', (event) => {
+              g.attr('transform', event.transform);
+            })
+            .on('start', () => {
+              svg.style('cursor', 'grabbing');
+            })
+            .on('end', () => {
+              svg.style('cursor', 'grab');
+            });
+
+          svg.call(zoom);
+
+          // Store for reset
+          currentZoom = zoom;
+          currentSvg = svg;
 
           const xScale = d3.scaleLinear()
             .domain([0, data.totalDuration])
-            .range([0, width]);
+            .range([0, containerWidth]);
 
           const colorScale = d3.scaleSequential(d3.interpolateWarm)
             .domain([0, 15]);
 
-          renderNodes(svg, data.nodes, 0, 0, width, xScale, colorScale);
-        }
-
-        function renderNodes(svg, nodes, x, y, width, xScale, colorScale) {
-          nodes.forEach(node => {
+          // Render each root node side by side
+          let currentX = 0;
+          data.nodes.forEach(node => {
             const nodeWidth = xScale(node.value);
-            const nodeX = x;
-
-            // Draw rectangle
-            const rect = svg.append('rect')
-              .attr('class', 'flame-rect')
-              .attr('x', nodeX)
-              .attr('y', y)
-              .attr('width', nodeWidth)
-              .attr('height', 18)
-              .attr('fill', colorScale(node.depth))
-              .on('click', () => {
-                if (node.filePath && node.line) {
-                  vscode.postMessage({
-                    type: 'navigateToSource',
-                    filePath: node.filePath,
-                    line: node.line
-                  });
-                }
-              })
-              .on('mouseover', (event) => showTooltip(event, node))
-              .on('mouseout', hideTooltip);
-
-            // Draw text if width allows
-            if (nodeWidth > 40) {
-              svg.append('text')
-                .attr('class', 'flame-text')
-                .attr('x', nodeX + 4)
-                .attr('y', y + 13)
-                .text(truncateText(node.name, nodeWidth - 8));
-            }
-
-            // Render children
-            if (node.children && node.children.length > 0) {
-              let childX = nodeX;
-              node.children.forEach(child => {
-                const childWidth = xScale(child.value);
-                renderNodes(svg, [child], childX, y + 18, childWidth, xScale, colorScale);
-                childX += childWidth;
-              });
-            }
+            renderNode(g, node, currentX, 0, xScale, colorScale, cellHeight);
+            currentX += nodeWidth;
           });
         }
+
+        function renderNode(svg, node, x, y, xScale, colorScale, cellHeight) {
+          const nodeWidth = xScale(node.value);
+
+          // Draw rectangle
+          svg.append('rect')
+            .attr('class', 'flame-rect')
+            .attr('x', x)
+            .attr('y', y)
+            .attr('width', nodeWidth)
+            .attr('height', cellHeight)
+            .attr('fill', colorScale(node.depth))
+            .on('click', () => {
+              if (node.filePath && node.line) {
+                vscode.postMessage({
+                  type: 'navigateToSource',
+                  filePath: node.filePath,
+                  line: node.line
+                });
+              }
+            })
+            .on('mouseover', (event) => showTooltip(event, node))
+            .on('mouseout', hideTooltip);
+
+          // Draw text if width allows
+          if (nodeWidth > 40) {
+            svg.append('text')
+              .attr('class', 'flame-text')
+              .attr('x', x + 4)
+              .attr('y', y + (cellHeight / 2) + 5)
+              .text(truncateText(node.name, nodeWidth - 8));
+          }
+
+          // Render children
+          if (node.children && node.children.length > 0) {
+            let childX = x;
+            node.children.forEach(child => {
+              const childWidth = xScale(child.value);
+              renderNode(svg, child, childX, y + cellHeight, xScale, colorScale, cellHeight);
+              childX += childWidth;
+            });
+          }
+        }
+
+
 
         function showTooltip(event, node) {
           const tooltip = d3.select('#tooltip');
@@ -315,10 +453,44 @@ export class FlameGraphViewProvider implements vscode.WebviewViewProvider {
           return count;
         }
 
+        function refreshGraph() {
+          document.getElementById('update-indicator').style.display = 'inline-block';
+          vscode.postMessage({ type: 'refresh' });
+        }
+
         function resetZoom() {
-          if (flameData) {
-            renderFlameGraph(flameData);
+          if (currentSvg && currentZoom) {
+            currentSvg.transition()
+              .duration(750)
+              .call(currentZoom.transform, d3.zoomIdentity);
           }
+        }
+
+        function clearGraph() {
+          flameData = null;
+          currentZoom = null;
+          currentSvg = null;
+          vscode.postMessage({ type: 'clear' });
+          showEmptyState();
+          document.getElementById('stats').textContent = '';
+        }
+
+        function showEmptyState() {
+          const container = d3.select('#flame-graph');
+          container.selectAll('*').remove();
+          container.append('div')
+            .attr('class', 'empty-state')
+            .html(\`
+              <h3>📊 Angular X-Ray Flame Graph</h3>
+              <p><strong>No performance data yet.</strong></p>
+              <ol style="text-align: left; display: inline-block;">
+                <li>Run <code>Angular X-Ray: Setup Performance Monitoring</code></li>
+                <li>Add <code>@TrackPerformance()</code> decorators to your methods</li>
+                <li>Start your app with <code>ng serve</code></li>
+                <li>Interact with your app</li>
+                <li>Click Refresh to view flame graph</li>
+              </ol>
+            \`);
         }
       </script>
     </body>

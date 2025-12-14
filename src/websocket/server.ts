@@ -1,6 +1,7 @@
-import * as vscode from 'vscode';
-import { WebSocket, WebSocketServer } from 'ws';
-import { PerformanceMessage } from '../types';
+import * as vscode from "vscode";
+import { WebSocket, WebSocketServer } from "ws";
+import { PerformanceMessage } from "../types";
+import { PortManager } from "./portManager";
 
 export class XRayWebSocketServer {
   private wss: WebSocketServer | null = null;
@@ -11,31 +12,40 @@ export class XRayWebSocketServer {
   private onClientDisconnectedCallback?: () => void;
   private onErrorCallback?: (error: any) => void;
 
-  constructor(outputChannel: vscode.OutputChannel) {
+  constructor(
+    outputChannel: vscode.OutputChannel,
+    private portManager: PortManager,
+  ) {
     this.outputChannel = outputChannel;
   }
 
   /**
-   * Start the WebSocket server on port 3333
+   * Start the WebSocket server
    */
-  public start(): void {
+  public async start(): Promise<void> {
     try {
+      // Get port to use
+      const port = await this.portManager.getPortToUse();
+      this.portManager.setCurrentPort(port);
+
       this.wss = new WebSocketServer({
-        port: 3333,
+        port: port,
         // Enable CORS to allow Angular apps from different ports
-        verifyClient: () => true
+        verifyClient: () => true,
       });
 
-      this.wss.on('listening', () => {
-        this.outputChannel.appendLine('Angular X-Ray WebSocket server started on port 3333');
+      this.wss.on("listening", () => {
+        this.outputChannel.appendLine(
+          `Angular X-Ray WebSocket server started on port ${port}`,
+        );
       });
 
-      this.wss.on('connection', (ws: WebSocket) => {
+      this.wss.on("connection", (ws: WebSocket) => {
         this.clients.add(ws);
-        this.outputChannel.appendLine('Client connected to Angular X-Ray');
+        this.outputChannel.appendLine("Client connected to Angular X-Ray");
         this.onClientConnectedCallback?.();
 
-        ws.on('message', (data: Buffer) => {
+        ws.on("message", (data: Buffer) => {
           try {
             const message = JSON.parse(data.toString()) as PerformanceMessage;
             this.handleMessage(message);
@@ -44,31 +54,47 @@ export class XRayWebSocketServer {
           }
         });
 
-        ws.on('close', () => {
+        ws.on("close", () => {
           this.clients.delete(ws);
-          this.outputChannel.appendLine('Client disconnected from Angular X-Ray');
+          this.outputChannel.appendLine(
+            "Client disconnected from Angular X-Ray",
+          );
           this.onClientDisconnectedCallback?.();
         });
 
-        ws.on('error', (error) => {
-          this.outputChannel.appendLine(`WebSocket client error: ${error.message}`);
+        ws.on("error", (error) => {
+          this.outputChannel.appendLine(
+            `WebSocket client error: ${error.message}`,
+          );
         });
       });
 
-      this.wss.on('error', (error: NodeJS.ErrnoException) => {
-        if (error.code === 'EADDRINUSE') {
+      this.wss.on("error", (error: NodeJS.ErrnoException) => {
+        if (error.code === "EADDRINUSE") {
+          const port = this.portManager.getCurrentPort();
           this.outputChannel.appendLine(
-            'Port 3333 is already in use. Angular X-Ray WebSocket server could not start.'
+            `Port ${port} is already in use. Angular X-Ray WebSocket server could not start.`,
           );
         } else {
-          this.outputChannel.appendLine(`WebSocket server error: ${error.message}`);
+          this.outputChannel.appendLine(
+            `WebSocket server error: ${error.message}`,
+          );
         }
         this.onErrorCallback?.(error);
       });
-
     } catch (error) {
-      this.outputChannel.appendLine(`Failed to start WebSocket server: ${error}`);
+      this.outputChannel.appendLine(
+        `Failed to start WebSocket server: ${error}`,
+      );
+      throw error;
     }
+  }
+
+  /**
+   * Get current server port
+   */
+  public getPort(): number {
+    return this.portManager.getCurrentPort();
   }
 
   /**
@@ -77,7 +103,7 @@ export class XRayWebSocketServer {
   public stop(): void {
     if (this.wss) {
       this.wss.close(() => {
-        this.outputChannel.appendLine('Angular X-Ray WebSocket server stopped');
+        this.outputChannel.appendLine("Angular X-Ray WebSocket server stopped");
       });
       this.wss = null;
     }
@@ -125,8 +151,10 @@ export class XRayWebSocketServer {
     // Log the message
     this.outputChannel.appendLine(
       `Performance: ${message.class}.${message.method} - ${message.duration}ms` +
-      (message.file ? ` (${message.file})` : '') +
-      (message.changeDetectionCount ? ` [CD: ${message.changeDetectionCount}]` : '')
+        (message.file ? ` (${message.file})` : "") +
+        (message.changeDetectionCount
+          ? ` [CD: ${message.changeDetectionCount}]`
+          : ""),
     );
 
     // Call the registered callback

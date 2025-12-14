@@ -1,24 +1,28 @@
-import * as vscode from 'vscode';
-import { SnapshotMetadata, MethodPerformanceDiff, NativeModule } from '../types';
-import { SnapshotStorageManager } from '../storage/snapshotManager';
+import * as vscode from "vscode";
+import {
+  SnapshotMetadata,
+  MethodPerformanceDiff,
+  NativeModule,
+} from "../types";
+import { SnapshotStorageManager } from "../storage/snapshotManager";
 
 /**
  * Performance comparison webview provider
  */
 export class ComparisonViewProvider implements vscode.WebviewViewProvider {
-  public static readonly viewType = 'angularXray.comparison';
+  public static readonly viewType = "angularXray.comparison";
   private _view?: vscode.WebviewView;
 
   constructor(
     private readonly _extensionUri: vscode.Uri,
     private nativeModule: NativeModule,
-    private storageManager: SnapshotStorageManager
+    private storageManager: SnapshotStorageManager,
   ) {}
 
   public resolveWebviewView(
     webviewView: vscode.WebviewView,
     context: vscode.WebviewViewResolveContext,
-    _token: vscode.CancellationToken
+    _token: vscode.CancellationToken,
   ): void {
     this._view = webviewView;
 
@@ -35,11 +39,11 @@ export class ComparisonViewProvider implements vscode.WebviewViewProvider {
    */
   public async compareSnapshots(
     baselineId: string,
-    currentId: string
+    currentId: string,
   ): Promise<void> {
     if (!this._view) {
       vscode.window.showWarningMessage(
-        'Comparison view not visible. Please open the Angular X-Ray panel.'
+        "Comparison view not visible. Please open the Angular X-Ray panel.",
       );
       return;
     }
@@ -72,14 +76,14 @@ export class ComparisonViewProvider implements vscode.WebviewViewProvider {
       const comparisonJson = this.nativeModule.comparePerformanceSnapshots(
         baselineJson,
         currentJson,
-        5.0 // 5% threshold
+        5.0, // 5% threshold
       );
 
       const comparison: MethodPerformanceDiff[] = JSON.parse(comparisonJson);
 
       // Send to webview
       this._view.webview.postMessage({
-        type: 'updateComparison',
+        type: "updateComparison",
         baseline: {
           name: baseline.name,
           branch: baseline.gitBranch,
@@ -93,9 +97,7 @@ export class ComparisonViewProvider implements vscode.WebviewViewProvider {
         data: comparison,
       });
     } catch (error) {
-      vscode.window.showErrorMessage(
-        `Failed to compare snapshots: ${error}`
-      );
+      vscode.window.showErrorMessage(`Failed to compare snapshots: ${error}`);
     }
   }
 
@@ -113,91 +115,141 @@ export class ComparisonViewProvider implements vscode.WebviewViewProvider {
       <style>
         body {
           margin: 0;
-          padding: 15px;
-          background: var(--vscode-editor-background);
-          color: var(--vscode-editor-foreground);
-          font-family: var(--vscode-font-family);
+          padding: 20px;
+          background: #000000;
+          color: #e4e4e7;
+          font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
           font-size: 13px;
         }
         h2 {
           margin-top: 0;
-          font-size: 16px;
+          margin-bottom: 20px;
+          font-size: 18px;
+          font-weight: 600;
+          color: #ffffff;
+          letter-spacing: -0.02em;
         }
         .snapshot-info {
-          background: var(--vscode-textBlockQuote-background);
-          padding: 10px;
-          margin-bottom: 15px;
-          border-radius: 4px;
-          border-left: 3px solid var(--vscode-textBlockQuote-border);
+          background: rgba(255, 255, 255, 0.05);
+          border: 1px solid rgba(255, 255, 255, 0.1);
+          padding: 14px 16px;
+          margin-bottom: 16px;
+          border-radius: 8px;
+          font-size: 13px;
+          line-height: 1.6;
+        }
+        .snapshot-info strong {
+          color: #ffffff;
+          font-weight: 500;
         }
         .summary {
-          background: var(--vscode-editor-inactiveSelectionBackground);
-          padding: 10px;
-          margin-bottom: 15px;
-          border-radius: 4px;
+          background: rgba(255, 255, 255, 0.03);
+          border: 1px solid rgba(255, 255, 255, 0.08);
+          padding: 14px 16px;
+          margin-bottom: 16px;
+          border-radius: 8px;
+          font-size: 13px;
+        }
+        .summary strong {
+          color: #ffffff;
+          font-weight: 500;
+          margin-right: 8px;
         }
         table {
           width: 100%;
-          border-collapse: collapse;
-          margin-top: 10px;
+          border-collapse: separate;
+          border-spacing: 0;
+          margin-top: 12px;
+          border-radius: 8px;
+          overflow: hidden;
+          border: 1px solid rgba(255, 255, 255, 0.1);
         }
         th, td {
-          padding: 6px 8px;
+          padding: 10px 12px;
           text-align: left;
-          border-bottom: 1px solid var(--vscode-panel-border);
+          border-bottom: 1px solid rgba(255, 255, 255, 0.08);
         }
         th {
-          background: var(--vscode-editor-selectionBackground);
-          font-weight: 600;
+          background: rgba(255, 255, 255, 0.05);
+          color: #ffffff;
+          font-weight: 500;
+          font-size: 12px;
+          text-transform: uppercase;
+          letter-spacing: 0.05em;
           position: sticky;
           top: 0;
           z-index: 10;
         }
-        tr:hover {
-          background: var(--vscode-list-hoverBackground);
+        tbody tr {
+          transition: background 0.15s;
+        }
+        tbody tr:hover {
+          background: rgba(255, 255, 255, 0.05);
+        }
+        tbody tr:last-child td {
+          border-bottom: none;
         }
         .regressed {
-          background-color: rgba(255, 80, 80, 0.15);
+          background-color: rgba(239, 68, 68, 0.1);
+          border-left: 2px solid rgba(239, 68, 68, 0.6);
         }
         .improved {
-          background-color: rgba(80, 255, 80, 0.15);
+          background-color: rgba(34, 197, 94, 0.1);
+          border-left: 2px solid rgba(34, 197, 94, 0.6);
         }
         .new {
-          background-color: rgba(80, 150, 255, 0.15);
+          background-color: rgba(59, 130, 246, 0.1);
+          border-left: 2px solid rgba(59, 130, 246, 0.6);
         }
         .removed {
-          background-color: rgba(150, 150, 150, 0.15);
+          background-color: rgba(156, 163, 175, 0.1);
+          border-left: 2px solid rgba(156, 163, 175, 0.6);
         }
         .filter-buttons {
-          margin: 10px 0;
+          margin: 12px 0;
+          display: flex;
+          gap: 8px;
         }
         button {
-          background: var(--vscode-button-background);
-          color: var(--vscode-button-foreground);
-          border: none;
-          padding: 4px 10px;
-          margin-right: 6px;
+          background: rgba(255, 255, 255, 0.05);
+          color: #e4e4e7;
+          border: 1px solid rgba(255, 255, 255, 0.1);
+          padding: 6px 14px;
           cursor: pointer;
-          border-radius: 2px;
+          border-radius: 6px;
           font-size: 12px;
+          font-weight: 500;
+          transition: all 0.2s;
         }
         button:hover {
-          background: var(--vscode-button-hoverBackground);
+          background: rgba(255, 255, 255, 0.1);
+          border-color: rgba(255, 255, 255, 0.2);
+        }
+        button:active {
+          transform: scale(0.98);
         }
         button.active {
-          background: var(--vscode-button-hoverBackground);
-          font-weight: 600;
+          background: rgba(255, 255, 255, 0.15);
+          border-color: rgba(255, 255, 255, 0.3);
+          color: #ffffff;
         }
         .positive {
-          color: #4ec9b0;
+          color: #22c55e;
+          font-weight: 500;
         }
         .negative {
-          color: #f48771;
+          color: #ef4444;
+          font-weight: 500;
         }
         .empty-state {
           text-align: center;
-          padding: 40px 20px;
-          color: var(--vscode-descriptionForeground);
+          padding: 60px 20px;
+          color: #71717a;
+        }
+        .empty-state p:first-child {
+          font-size: 15px;
+          color: #a1a1aa;
+          margin-bottom: 8px;
         }
       </style>
     </head>
