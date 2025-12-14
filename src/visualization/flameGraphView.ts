@@ -42,6 +42,9 @@ export class FlameGraphViewProvider implements vscode.WebviewViewProvider {
         case "refresh":
           this.manualRefresh();
           break;
+        case "clear":
+          this.clearData();
+          break;
       }
     });
   }
@@ -74,6 +77,18 @@ export class FlameGraphViewProvider implements vscode.WebviewViewProvider {
         `Failed to generate flame graph: ${error}`,
       );
     }
+  }
+
+  /**
+   * Clear all flame graph data
+   */
+  private clearData(): void {
+    if (!this.callStackBuilder) {
+      return;
+    }
+
+    this.callStackBuilder.clear();
+    vscode.window.showInformationMessage("Flame graph data cleared");
   }
 
   /**
@@ -235,6 +250,8 @@ export class FlameGraphViewProvider implements vscode.WebviewViewProvider {
     <body>
       <div id="controls">
         <button onclick="refreshGraph()">Refresh</button>
+        <button onclick="resetZoom()">Reset Zoom</button>
+        <button onclick="clearGraph()">Clear</button>
         <span id="stats"></span>
         <span id="update-indicator" style="display: none;">
           <span class="spinner">⟳</span> Updating...
@@ -251,6 +268,8 @@ export class FlameGraphViewProvider implements vscode.WebviewViewProvider {
       <script>
         const vscode = acquireVsCodeApi();
         let flameData = null;
+        let currentZoom = null;
+        let currentSvg = null;
 
         window.addEventListener('message', event => {
           const message = event.data;
@@ -320,6 +339,10 @@ export class FlameGraphViewProvider implements vscode.WebviewViewProvider {
 
           svg.call(zoom);
 
+          // Store for reset
+          currentZoom = zoom;
+          currentSvg = svg;
+
           const xScale = d3.scaleLinear()
             .domain([0, data.totalDuration])
             .range([0, containerWidth]);
@@ -327,54 +350,59 @@ export class FlameGraphViewProvider implements vscode.WebviewViewProvider {
           const colorScale = d3.scaleSequential(d3.interpolateWarm)
             .domain([0, 15]);
 
-          renderNodes(g, data.nodes, 0, 0, containerWidth, xScale, colorScale, cellHeight);
-        }
-
-        function renderNodes(svg, nodes, x, y, width, xScale, colorScale, cellHeight = 24) {
-          nodes.forEach(node => {
+          // Render each root node side by side
+          let currentX = 0;
+          data.nodes.forEach(node => {
             const nodeWidth = xScale(node.value);
-            const nodeX = x;
-
-            // Draw rectangle
-            const rect = svg.append('rect')
-              .attr('class', 'flame-rect')
-              .attr('x', nodeX)
-              .attr('y', y)
-              .attr('width', nodeWidth)
-              .attr('height', cellHeight)
-              .attr('fill', colorScale(node.depth))
-              .on('click', () => {
-                if (node.filePath && node.line) {
-                  vscode.postMessage({
-                    type: 'navigateToSource',
-                    filePath: node.filePath,
-                    line: node.line
-                  });
-                }
-              })
-              .on('mouseover', (event) => showTooltip(event, node))
-              .on('mouseout', hideTooltip);
-
-            // Draw text if width allows
-            if (nodeWidth > 40) {
-              svg.append('text')
-                .attr('class', 'flame-text')
-                .attr('x', nodeX + 4)
-                .attr('y', y + (cellHeight / 2) + 5)
-                .text(truncateText(node.name, nodeWidth - 8));
-            }
-
-            // Render children
-            if (node.children && node.children.length > 0) {
-              let childX = nodeX;
-              node.children.forEach(child => {
-                const childWidth = xScale(child.value);
-                renderNodes(svg, [child], childX, y + cellHeight, childWidth, xScale, colorScale, cellHeight);
-                childX += childWidth;
-              });
-            }
+            renderNode(g, node, currentX, 0, xScale, colorScale, cellHeight);
+            currentX += nodeWidth;
           });
         }
+
+        function renderNode(svg, node, x, y, xScale, colorScale, cellHeight) {
+          const nodeWidth = xScale(node.value);
+
+          // Draw rectangle
+          svg.append('rect')
+            .attr('class', 'flame-rect')
+            .attr('x', x)
+            .attr('y', y)
+            .attr('width', nodeWidth)
+            .attr('height', cellHeight)
+            .attr('fill', colorScale(node.depth))
+            .on('click', () => {
+              if (node.filePath && node.line) {
+                vscode.postMessage({
+                  type: 'navigateToSource',
+                  filePath: node.filePath,
+                  line: node.line
+                });
+              }
+            })
+            .on('mouseover', (event) => showTooltip(event, node))
+            .on('mouseout', hideTooltip);
+
+          // Draw text if width allows
+          if (nodeWidth > 40) {
+            svg.append('text')
+              .attr('class', 'flame-text')
+              .attr('x', x + 4)
+              .attr('y', y + (cellHeight / 2) + 5)
+              .text(truncateText(node.name, nodeWidth - 8));
+          }
+
+          // Render children
+          if (node.children && node.children.length > 0) {
+            let childX = x;
+            node.children.forEach(child => {
+              const childWidth = xScale(child.value);
+              renderNode(svg, child, childX, y + cellHeight, xScale, colorScale, cellHeight);
+              childX += childWidth;
+            });
+          }
+        }
+
+
 
         function showTooltip(event, node) {
           const tooltip = d3.select('#tooltip');
@@ -428,6 +456,23 @@ export class FlameGraphViewProvider implements vscode.WebviewViewProvider {
         function refreshGraph() {
           document.getElementById('update-indicator').style.display = 'inline-block';
           vscode.postMessage({ type: 'refresh' });
+        }
+
+        function resetZoom() {
+          if (currentSvg && currentZoom) {
+            currentSvg.transition()
+              .duration(750)
+              .call(currentZoom.transform, d3.zoomIdentity);
+          }
+        }
+
+        function clearGraph() {
+          flameData = null;
+          currentZoom = null;
+          currentSvg = null;
+          vscode.postMessage({ type: 'clear' });
+          showEmptyState();
+          document.getElementById('stats').textContent = '';
         }
 
         function showEmptyState() {
