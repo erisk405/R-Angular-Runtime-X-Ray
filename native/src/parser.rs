@@ -20,17 +20,98 @@ impl TypeScriptParser {
         file_content: &str,
         method_name: &str,
     ) -> Result<Option<u32>, String> {
+        // Quick regex check first - if method is simple, use fast regex
+        if let Ok(Some(line)) = self.quick_regex_search(file_content, method_name) {
+            return Ok(Some(line));
+        }
+
+        // Try parsing with different configurations if the first attempt fails
+        let configs = vec![
+            // First try: Full TypeScript with JSX support
+            Syntax::Typescript(TsSyntax {
+                tsx: true,
+                decorators: true,
+                dts: false,
+                no_early_errors: true,
+                ..Default::default()
+            }),
+            // Second try: TypeScript without JSX
+            Syntax::Typescript(TsSyntax {
+                tsx: false,
+                decorators: true,
+                dts: false,
+                no_early_errors: true,
+                ..Default::default()
+            }),
+            // Third try: More permissive parsing
+            Syntax::Typescript(TsSyntax {
+                tsx: true,
+                decorators: true,
+                dts: true,
+                no_early_errors: true,
+                ..Default::default()
+            }),
+        ];
+
+        for (i, syntax) in configs.iter().enumerate() {
+            match self.try_parse_with_syntax(file_content, method_name, syntax.clone()) {
+                Ok(result) => return Ok(result),
+                Err(_e) => {
+                    if i == configs.len() - 1 {
+                        // If all parsing attempts fail, try comprehensive fallback method
+                        return self.fallback_method_search(file_content, method_name);
+                    }
+                    // Continue to next syntax configuration
+                    continue;
+                }
+            }
+        }
+
+        // This should never be reached, but just in case
+        self.fallback_method_search(file_content, method_name)
+    }
+
+    /// Quick regex search for simple method patterns
+    fn quick_regex_search(
+        &self,
+        file_content: &str,
+        method_name: &str,
+    ) -> Result<Option<u32>, String> {
+        // Simple patterns for common method definitions
+        let simple_patterns = vec![
+            // Standard method: methodName() {
+            format!(r"^\s*{}[\s]*\([^)]*\)[\s]*\{{", regex::escape(method_name)),
+            // Public method: public methodName() {
+            format!(
+                r"^\s*public[\s]+{}[\s]*\([^)]*\)[\s]*\{{",
+                regex::escape(method_name)
+            ),
+        ];
+
+        for pattern in simple_patterns {
+            if let Ok(regex) = regex::Regex::new(&pattern) {
+                for (line_num, line) in file_content.lines().enumerate() {
+                    if regex.is_match(line) {
+                        return Ok(Some((line_num + 1) as u32));
+                    }
+                }
+            }
+        }
+
+        Ok(None)
+    }
+
+    /// Try parsing with a specific syntax configuration
+    fn try_parse_with_syntax(
+        &self,
+        file_content: &str,
+        method_name: &str,
+        syntax: Syntax,
+    ) -> Result<Option<u32>, String> {
         // Create a source file
         let source_file = self
             .source_map
             .new_source_file(Lrc::new(FileName::Anon), file_content.to_string());
-
-        // Configure TypeScript parser
-        let syntax = Syntax::Typescript(TsSyntax {
-            tsx: true,
-            decorators: true,
-            ..Default::default()
-        });
 
         // Create parser
         let input = StringInput::from(&*source_file);
@@ -45,6 +126,51 @@ impl TypeScriptParser {
         let line = self.find_method_in_module(&module, method_name);
 
         Ok(line)
+    }
+
+    /// Fallback method using regex-based search when AST parsing fails
+    fn fallback_method_search(
+        &self,
+        file_content: &str,
+        method_name: &str,
+    ) -> Result<Option<u32>, String> {
+        // Use regex patterns to find method definitions
+        let patterns = vec![
+            // Standard method definition: methodName() {
+            format!(r"^\s*{}[\s]*\([^)]*\)[\s]*\{{", regex::escape(method_name)),
+            // Arrow function: methodName = () => {
+            format!(
+                r"^\s*{}[\s]*=[\s]*\([^)]*\)[\s]*=>",
+                regex::escape(method_name)
+            ),
+            // Public/private method: public methodName() {
+            format!(
+                r"^\s*(public|private|protected)[\s]+{}[\s]*\([^)]*\)[\s]*\{{",
+                regex::escape(method_name)
+            ),
+            // Async method: async methodName() {
+            format!(
+                r"^\s*(async[\s]+)?{}[\s]*\([^)]*\)[\s]*\{{",
+                regex::escape(method_name)
+            ),
+            // Decorator + method: @Decorator methodName() {
+            format!(
+                r"^\s*@[\w.]+[\s]*\n[\s]*{}[\s]*\([^)]*\)[\s]*\{{",
+                regex::escape(method_name)
+            ),
+        ];
+
+        for pattern in patterns {
+            if let Ok(regex) = regex::Regex::new(&pattern) {
+                for (line_num, line) in file_content.lines().enumerate() {
+                    if regex.is_match(line) {
+                        return Ok(Some((line_num + 1) as u32));
+                    }
+                }
+            }
+        }
+
+        Ok(None)
     }
 
     /// Search for a method in the module's AST

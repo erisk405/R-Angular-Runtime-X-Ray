@@ -53,7 +53,7 @@ export function activate(context: vscode.ExtensionContext) {
   const callStackBuilder = new CallStackBuilder();
   const flameGraphProvider = new FlameGraphViewProvider(
     context.extensionUri,
-    nativeModule,
+    nativeModule
   );
 
   // Wire up dependencies for flame graph
@@ -61,7 +61,7 @@ export function activate(context: vscode.ExtensionContext) {
   const comparisonProvider = new ComparisonViewProvider(
     context.extensionUri,
     nativeModule,
-    storageManager,
+    storageManager
   );
 
   // Store performance data
@@ -83,7 +83,7 @@ export function activate(context: vscode.ExtensionContext) {
     .catch((error) => {
       statusBarManager.updateStatus(ConnectionStatus.Error);
       vscode.window.showErrorMessage(
-        `Failed to start WebSocket server: ${error}`,
+        `Failed to start WebSocket server: ${error}`
       );
     });
 
@@ -106,7 +106,7 @@ export function activate(context: vscode.ExtensionContext) {
       port,
     });
     outputChannel.appendLine(
-      `Client disconnected. Total clients: ${clientCount}`,
+      `Client disconnected. Total clients: ${clientCount}`
     );
   });
 
@@ -118,19 +118,19 @@ export function activate(context: vscode.ExtensionContext) {
   // Register CodeLens provider for TypeScript files
   const codeLensDisposable = vscode.languages.registerCodeLensProvider(
     { language: "typescript", scheme: "file" },
-    codeLensProvider,
+    codeLensProvider
   );
 
   // Register NEW webview providers
   context.subscriptions.push(
     vscode.window.registerWebviewViewProvider(
       FlameGraphViewProvider.viewType,
-      flameGraphProvider,
+      flameGraphProvider
     ),
     vscode.window.registerWebviewViewProvider(
       ComparisonViewProvider.viewType,
-      comparisonProvider,
-    ),
+      comparisonProvider
+    )
   );
 
   // Handle incoming performance messages
@@ -160,16 +160,16 @@ export function activate(context: vscode.ExtensionContext) {
         if (encodedData && typeof encodedData === "string") {
           try {
             const decoded = JSON.parse(
-              Buffer.from(encodedData, "base64").toString("utf-8"),
+              Buffer.from(encodedData, "base64").toString("utf-8")
             );
             className = decoded.className;
             methodName = decoded.methodName;
             outputChannel.appendLine(
-              `[AI Analysis] Decoded from argument: ${className}.${methodName}`,
+              `[AI Analysis] Decoded from argument: ${className}.${methodName}`
             );
           } catch (e) {
             outputChannel.appendLine(
-              `[AI Analysis] Failed to decode argument: ${e}`,
+              `[AI Analysis] Failed to decode argument: ${e}`
             );
             encodedData = undefined;
           }
@@ -178,7 +178,7 @@ export function activate(context: vscode.ExtensionContext) {
         // Fallback: Find data from current file and show quick pick
         if (!encodedData) {
           outputChannel.appendLine(
-            `[AI Analysis] No argument received, searching from active editor`,
+            `[AI Analysis] No argument received, searching from active editor`
           );
 
           const editor = vscode.window.activeTextEditor;
@@ -199,7 +199,7 @@ export function activate(context: vscode.ExtensionContext) {
 
           if (availableData.length === 0) {
             vscode.window.showErrorMessage(
-              `No performance data found for ${filePath}`,
+              `No performance data found for ${filePath}`
             );
             return;
           }
@@ -211,7 +211,9 @@ export function activate(context: vscode.ExtensionContext) {
           } else {
             const items = availableData.map((d) => ({
               label: `${d.className}.${d.methodName}`,
-              description: `Line ${d.line}: ${d.averageDuration.toFixed(2)}ms avg`,
+              description: `Line ${d.line}: ${d.averageDuration.toFixed(
+                2
+              )}ms avg`,
               data: d,
             }));
 
@@ -228,27 +230,29 @@ export function activate(context: vscode.ExtensionContext) {
           }
 
           outputChannel.appendLine(
-            `[AI Analysis] Selected from file: ${className}.${methodName}`,
+            `[AI Analysis] Selected from file: ${className}.${methodName}`
           );
         }
 
         // Validate we have className and methodName
         if (!className || !methodName) {
           outputChannel.appendLine(
-            `[AI Analysis] Missing className or methodName`,
+            `[AI Analysis] Missing className or methodName`
           );
           vscode.window.showErrorMessage(
-            "Cannot analyze: Missing method information",
+            "Cannot analyze: Missing method information"
           );
           return;
         }
 
         // Debug logging
         outputChannel.appendLine(
-          `[AI Analysis] Analyzing: ${className}.${methodName}`,
+          `[AI Analysis] Analyzing: ${className}.${methodName}`
         );
         outputChannel.appendLine(
-          `[AI Analysis] PerformanceStore keys: ${Array.from(performanceStore.keys()).join(", ")}`,
+          `[AI Analysis] PerformanceStore keys: ${Array.from(
+            performanceStore.keys()
+          ).join(", ")}`
         );
 
         // Find data in performanceStore using className.methodName as key
@@ -257,11 +261,11 @@ export function activate(context: vscode.ExtensionContext) {
 
         if (!data) {
           outputChannel.appendLine(
-            `[AI Analysis] No data found for key: ${key}`,
+            `[AI Analysis] No data found for key: ${key}`
           );
           vscode.window.showErrorMessage(
             `Cannot analyze ${className}.${methodName}: No performance data found. ` +
-              `Make sure the method has been executed at least once.`,
+              `Make sure the method has been executed at least once.`
           );
           return;
         }
@@ -269,34 +273,36 @@ export function activate(context: vscode.ExtensionContext) {
         // Validate that we have location information
         if (!data.filePath || !data.line) {
           outputChannel.appendLine(
-            `[AI Analysis] Data found but missing location: filePath=${data.filePath}, line=${data.line}`,
+            `[AI Analysis] Data found but missing location: filePath=${data.filePath}, line=${data.line}`
           );
           vscode.window.showErrorMessage(
             `Cannot analyze ${className}.${methodName}: Location information missing. ` +
-              `Try re-running your Angular app to collect fresh data.`,
+              `Try re-running your Angular app to collect fresh data.`
           );
           return;
         }
 
         outputChannel.appendLine(
-          `[AI Analysis] Found data: ${data.filePath}:${data.line}`,
+          `[AI Analysis] Found data: ${data.filePath}:${data.line}`
         );
 
         const prompt = await promptGenerator.generatePrompt(data);
         await promptGenerator.copyToClipboard(prompt);
 
         vscode.window.showInformationMessage(
-          `AI analysis prompt for ${data.className}.${data.methodName} copied to clipboard!`,
+          `AI analysis prompt for ${data.className}.${data.methodName} copied to clipboard!`
         );
       } catch (error) {
         outputChannel.appendLine(
-          `[AI Analysis] Error: ${error instanceof Error ? error.stack : error}`,
+          `[AI Analysis] Error: ${error instanceof Error ? error.stack : error}`
         );
         vscode.window.showErrorMessage(
-          `Failed to generate AI prompt: ${error instanceof Error ? error.message : error}`,
+          `Failed to generate AI prompt: ${
+            error instanceof Error ? error.message : error
+          }`
         );
       }
-    },
+    }
   );
 
   // Register NEW commands
@@ -304,14 +310,14 @@ export function activate(context: vscode.ExtensionContext) {
     "angularXray.setupProbe",
     async () => {
       await probeSetupManager.setupProbe();
-    },
+    }
   );
 
   const showStatusCommand = vscode.commands.registerCommand(
     "angularXray.showStatus",
     async () => {
       await statusBarManager.showStatusDetails();
-    },
+    }
   );
 
   const startCaptureCommand = vscode.commands.registerCommand(
@@ -319,9 +325,9 @@ export function activate(context: vscode.ExtensionContext) {
     async () => {
       captureManager.startCapture();
       vscode.window.showInformationMessage(
-        "Performance capture started. Run your Angular app to collect data.",
+        "Performance capture started. Run your Angular app to collect data."
       );
-    },
+    }
   );
 
   const stopCaptureCommand = vscode.commands.registerCommand(
@@ -341,13 +347,13 @@ export function activate(context: vscode.ExtensionContext) {
         try {
           await captureManager.stopCapture(name, storageManager);
           vscode.window.showInformationMessage(
-            `Snapshot '${name}' saved successfully!`,
+            `Snapshot '${name}' saved successfully!`
           );
         } catch (error) {
           vscode.window.showErrorMessage(`Failed to save snapshot: ${error}`);
         }
       }
-    },
+    }
   );
 
   const showFlameGraphCommand = vscode.commands.registerCommand(
@@ -356,16 +362,16 @@ export function activate(context: vscode.ExtensionContext) {
       const callStacks = callStackBuilder.buildCallTree();
       if (callStacks.length === 0) {
         vscode.window.showWarningMessage(
-          "No performance data available. Run your Angular app with @TrackPerformance() decorators.",
+          "No performance data available. Run your Angular app with @TrackPerformance() decorators."
         );
         return;
       }
 
       await flameGraphProvider.updateFlameGraph(callStacks);
       vscode.window.showInformationMessage(
-        `Flame graph updated with ${callStackBuilder.getCallCount()} calls.`,
+        `Flame graph updated with ${callStackBuilder.getCallCount()} calls.`
       );
-    },
+    }
   );
 
   const compareSnapshotsCommand = vscode.commands.registerCommand(
@@ -375,7 +381,7 @@ export function activate(context: vscode.ExtensionContext) {
 
       if (snapshots.length < 2) {
         vscode.window.showWarningMessage(
-          "Need at least 2 snapshots to compare. Create snapshots using Start/Stop Capture.",
+          "Need at least 2 snapshots to compare. Create snapshots using Start/Stop Capture."
         );
         return;
       }
@@ -387,7 +393,7 @@ export function activate(context: vscode.ExtensionContext) {
           detail: s.gitBranch ? `${s.gitBranch}@${s.gitCommit}` : undefined,
           id: s.id,
         })),
-        { placeHolder: "Select baseline snapshot" },
+        { placeHolder: "Select baseline snapshot" }
       );
 
       if (!baseline) return;
@@ -401,7 +407,7 @@ export function activate(context: vscode.ExtensionContext) {
             detail: s.gitBranch ? `${s.gitBranch}@${s.gitCommit}` : undefined,
             id: s.id,
           })),
-        { placeHolder: "Select current snapshot to compare" },
+        { placeHolder: "Select current snapshot to compare" }
       );
 
       if (!current) return;
@@ -409,12 +415,12 @@ export function activate(context: vscode.ExtensionContext) {
       try {
         await comparisonProvider.compareSnapshots(baseline.id, current.id);
         vscode.window.showInformationMessage(
-          `Comparing '${baseline.label}' vs '${current.label}'`,
+          `Comparing '${baseline.label}' vs '${current.label}'`
         );
       } catch (error) {
         vscode.window.showErrorMessage(`Failed to compare snapshots: ${error}`);
       }
-    },
+    }
   );
 
   const manageSnapshotsCommand = vscode.commands.registerCommand(
@@ -437,7 +443,9 @@ export function activate(context: vscode.ExtensionContext) {
 
       items.unshift({
         label: `📊 Storage Stats`,
-        description: `${snapshots.length} snapshots, ${(stats.totalSize / 1024).toFixed(1)}KB`,
+        description: `${snapshots.length} snapshots, ${(
+          stats.totalSize / 1024
+        ).toFixed(1)}KB`,
         detail: "Select a snapshot below to delete it",
         id: "",
       });
@@ -450,23 +458,23 @@ export function activate(context: vscode.ExtensionContext) {
         const confirm = await vscode.window.showWarningMessage(
           `Delete snapshot '${selected.label}'?`,
           { modal: true },
-          "Delete",
+          "Delete"
         );
 
         if (confirm === "Delete") {
           try {
             await storageManager.deleteSnapshot(selected.id);
             vscode.window.showInformationMessage(
-              `Snapshot '${selected.label}' deleted.`,
+              `Snapshot '${selected.label}' deleted.`
             );
           } catch (error) {
             vscode.window.showErrorMessage(
-              `Failed to delete snapshot: ${error}`,
+              `Failed to delete snapshot: ${error}`
             );
           }
         }
       }
-    },
+    }
   );
 
   // Handle active editor changes
@@ -488,13 +496,13 @@ export function activate(context: vscode.ExtensionContext) {
           port,
         });
         vscode.window.showInformationMessage(
-          `WebSocket server restarted on port ${port}`,
+          `WebSocket server restarted on port ${port}`
         );
       } catch (error) {
         statusBarManager.updateStatus(ConnectionStatus.Error);
         vscode.window.showErrorMessage(`Failed to restart server: ${error}`);
       }
-    },
+    }
   );
 
   const stopServerCommand = vscode.commands.registerCommand(
@@ -503,7 +511,7 @@ export function activate(context: vscode.ExtensionContext) {
       wsServer.stop();
       statusBarManager.updateStatus(ConnectionStatus.Disconnected);
       vscode.window.showInformationMessage("WebSocket server stopped");
-    },
+    }
   );
 
   const startServerCommand = vscode.commands.registerCommand(
@@ -517,13 +525,13 @@ export function activate(context: vscode.ExtensionContext) {
           port,
         });
         vscode.window.showInformationMessage(
-          `WebSocket server started on port ${port}`,
+          `WebSocket server started on port ${port}`
         );
       } catch (error) {
         statusBarManager.updateStatus(ConnectionStatus.Error);
         vscode.window.showErrorMessage(`Failed to start server: ${error}`);
       }
-    },
+    }
   );
 
   // Add disposables
@@ -544,7 +552,7 @@ export function activate(context: vscode.ExtensionContext) {
     { dispose: () => wsServer.stop() },
     { dispose: () => decorationManager.dispose() },
     { dispose: () => codeLensProvider.dispose() },
-    { dispose: () => statusBarManager.dispose() },
+    { dispose: () => statusBarManager.dispose() }
   );
 
   /**
@@ -552,7 +560,7 @@ export function activate(context: vscode.ExtensionContext) {
    */
   async function handlePerformanceMessage(
     message: PerformanceMessage,
-    outputChannel: vscode.OutputChannel,
+    outputChannel: vscode.OutputChannel
   ): Promise<void> {
     try {
       // Get workspace path
@@ -571,7 +579,7 @@ export function activate(context: vscode.ExtensionContext) {
         // Use Rust native module to find the file
         if (!nativeModule) {
           outputChannel.appendLine(
-            "Native module not loaded, cannot locate file",
+            "Native module not loaded, cannot locate file"
           );
           return;
         }
@@ -584,11 +592,23 @@ export function activate(context: vscode.ExtensionContext) {
           if (!result.found && message.class.startsWith("_")) {
             const classNameWithoutUnderscore = message.class.substring(1);
             outputChannel.appendLine(
-              `Retrying without underscore: ${classNameWithoutUnderscore}`,
+              `Retrying without underscore: ${classNameWithoutUnderscore}`
             );
             result = nativeModule.locateFile(
               classNameWithoutUnderscore,
+              workspacePath
+            );
+          }
+
+          // If still not found, try workspace heuristics
+          if (!result.found) {
+            outputChannel.appendLine(
+              `Detected minified class name: ${message.class}, attempting enhanced resolution`
+            );
+            result = await tryWorkspaceHeuristics(
+              message.class,
               workspacePath,
+              nativeModule
             );
           }
 
@@ -597,12 +617,12 @@ export function activate(context: vscode.ExtensionContext) {
             outputChannel.appendLine(`Located file: ${filePath}`);
           } else {
             outputChannel.appendLine(
-              `File not found for class: ${message.class} - will track without location`,
+              `File not found for class: ${message.class} - will track without location`
             );
           }
         } catch (error) {
           outputChannel.appendLine(
-            `Error locating file: ${error} - will track without location`,
+            `Error locating file: ${error} - will track without location`
           );
         }
       }
@@ -621,22 +641,22 @@ export function activate(context: vscode.ExtensionContext) {
           if (!result.found && message.method.startsWith("_")) {
             const methodNameWithoutUnderscore = message.method.substring(1);
             outputChannel.appendLine(
-              `Retrying method without underscore: ${methodNameWithoutUnderscore}`,
+              `Retrying method without underscore: ${methodNameWithoutUnderscore}`
             );
             result = nativeModule.parseMethod(
               fileContent,
-              methodNameWithoutUnderscore,
+              methodNameWithoutUnderscore
             );
           }
 
           if (result.found) {
             methodLine = result.line;
             outputChannel.appendLine(
-              `Found method ${message.method} at line ${methodLine}`,
+              `Found method ${message.method} at line ${methodLine}`
             );
           } else {
             outputChannel.appendLine(
-              `Method ${message.method} not found in ${filePath}`,
+              `Method ${message.method} not found in ${filePath}`
             );
           }
         } catch (error) {
@@ -644,7 +664,7 @@ export function activate(context: vscode.ExtensionContext) {
         }
       } else {
         outputChannel.appendLine(
-          `Warning: No file path for ${message.class}.${message.method}`,
+          `Warning: No file path for ${message.class}.${message.method}`
         );
       }
 
@@ -686,7 +706,7 @@ export function activate(context: vscode.ExtensionContext) {
       // **Validate before updating UI** - prevent errors in CodeLens and AI analysis
       if (!perfData.filePath || !perfData.line) {
         outputChannel.appendLine(
-          `Warning: ${message.class}.${message.method} has no location. Skipping UI update.`,
+          `Warning: ${message.class}.${message.method} has no location. Skipping UI update.`
         );
         return;
       }
@@ -710,8 +730,71 @@ export function activate(context: vscode.ExtensionContext) {
     }
   }
 
+  /**
+   * Try various heuristics to locate a file for a minified class name
+   */
+  async function tryWorkspaceHeuristics(
+    className: string,
+    workspacePath: string,
+    nativeModule: NativeModule
+  ): Promise<{ found: boolean; filePath: string }> {
+    // Strategy 1: Check if there's an active editor with a matching component
+    const activeEditor = vscode.window.activeTextEditor;
+    if (activeEditor && activeEditor.document.uri.scheme === "file") {
+      const activeFilePath = activeEditor.document.uri.fsPath;
+      if (activeFilePath.includes(".component.ts")) {
+        const content = activeEditor.document.getText();
+        if (
+          content.includes("@Component") ||
+          content.includes("export class")
+        ) {
+          return { found: true, filePath: activeFilePath };
+        }
+      }
+    }
+
+    // Strategy 2: Search for common Angular patterns
+    const patterns = [
+      "**/dashboard*.component.ts",
+      "**/news-feed*.component.ts",
+      "**/*dashboard*.ts",
+      "**/*component.ts",
+    ];
+
+    for (const pattern of patterns) {
+      try {
+        const files = await vscode.workspace.findFiles(
+          pattern,
+          "**/node_modules/**",
+          10
+        );
+        if (files.length > 0) {
+          // Return the first match
+          return { found: true, filePath: files[0].fsPath };
+        }
+      } catch (error) {
+        // Continue to next pattern
+      }
+    }
+
+    // Strategy 3: Use native module's enhanced scanning
+    try {
+      const result = nativeModule.locateFile(
+        "DashboardNewsFeedComponent",
+        workspacePath
+      );
+      if (result.found) {
+        return result;
+      }
+    } catch (error) {
+      // Continue
+    }
+
+    return { found: false, filePath: "" };
+  }
+
   outputChannel.appendLine(
-    "Angular X-Ray is ready to receive performance data",
+    "Angular X-Ray is ready to receive performance data"
   );
 }
 

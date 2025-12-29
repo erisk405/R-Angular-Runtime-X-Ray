@@ -105,6 +105,22 @@ export class DecorationManager {
       return;
     }
 
+    // Skip if editor is not a TypeScript file
+    if (!editor.document.uri.fsPath.endsWith('.ts') && !editor.document.uri.fsPath.endsWith('.tsx')) {
+      this.outputChannel.appendLine(
+        `[DecorationManager] Skipping non-TypeScript file: ${editor.document.uri.fsPath}`,
+      );
+      return;
+    }
+
+    // Skip output channels and other non-file editors
+    if (editor.document.uri.scheme !== 'file') {
+      this.outputChannel.appendLine(
+        `[DecorationManager] Skipping non-file editor (scheme: ${editor.document.uri.scheme}): ${editor.document.uri.fsPath}`,
+      );
+      return;
+    }
+
     const slowDecorations: vscode.DecorationOptions[] = [];
     const fastDecorations: vscode.DecorationOptions[] = [];
     const changeDetectionDecorations: vscode.DecorationOptions[] = [];
@@ -309,8 +325,20 @@ export class DecorationManager {
    * Update decorations when active editor changes
    */
   public onActiveEditorChange(): void {
+    const editor = vscode.window.activeTextEditor;
+
+    // Only process TypeScript files
+    if (!editor ||
+      editor.document.uri.scheme !== 'file' ||
+      (!editor.document.uri.fsPath.endsWith('.ts') && !editor.document.uri.fsPath.endsWith('.tsx'))) {
+      this.outputChannel.appendLine(
+        `[DecorationManager] Active editor changed to non-TypeScript file, skipping decorations`,
+      );
+      return;
+    }
+
     this.outputChannel.appendLine(
-      "[DecorationManager] Active editor changed, re-applying decorations",
+      `[DecorationManager] Active editor changed, re-applying decorations for: ${editor.document.uri.fsPath}`,
     );
 
     // Clear current decorations

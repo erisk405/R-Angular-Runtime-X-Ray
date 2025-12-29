@@ -171,9 +171,9 @@
     "@types/node": "^20.11.0",
     "@types/vscode": "^1.85.0",
     "@types/ws": "^8.5.10",
+    "@vscode/vsce": "^2.22.0",
     "cargo-cp-artifact": "^0.1.9",
-    "typescript": "^5.3.3",
-    "@vscode/vsce": "^2.22.0"
+    "typescript": "^5.3.3"
   },
   "napi": {
     "name": "native",
